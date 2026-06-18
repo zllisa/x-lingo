@@ -1,13 +1,18 @@
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useWordLookup } from '../../hooks/useWordLookup';
 import { Word } from '../../types';
 import { S, C } from '../../utils/theme';
+import { RootStackParamList } from '../App';
+
+type WordDetailRoute = RouteProp<RootStackParamList, 'WordDetail'>;
 
 export default function WordDetailModal() {
-  const router = useRouter();
-  const { word, source } = useLocalSearchParams<{ word: string; source: string }>();
+  const navigation = useNavigation();
+  const route = useRoute<WordDetailRoute>();
+  const word = route.params?.word ?? '';
+  const source = route.params?.source ?? '';
   const { words, addWord } = useLibraryStore();
   const { data, isLoading } = useWordLookup(word || '', true);
 
@@ -15,7 +20,7 @@ export default function WordDetailModal() {
   const alreadySaved = !!existing;
 
   const handleSave = () => {
-    if (alreadySaved) { router.back(); return; }
+    if (alreadySaved) { navigation.goBack(); return; }
     const isLoanword = /^[a-zA-Z]+$/.test(word || '');
     const newWord: Word = {
       id: Date.now().toString(),
@@ -33,11 +38,11 @@ export default function WordDetailModal() {
       savedAt: Date.now(),
     };
     addWord(newWord);
-    router.back();
+    navigation.goBack();
   };
 
   return (
-    <View style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+    <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => navigation.goBack()}>
       <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
         <Text style={[S.textBase, S.bold, S.text, S.mb1]}>🔍 单词详情</Text>
@@ -68,11 +73,11 @@ export default function WordDetailModal() {
           <TouchableOpacity style={[S.flex1, S.py3, S.roundedFull, alreadySaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter]} onPress={handleSave}>
             <Text style={[S.textSm, S.textWhite, S.semibold]}>{alreadySaved ? '✅ 已在学习库' : '⭐ 收藏到学习库'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.itemsCenter]} onPress={() => router.back()}>
+          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.itemsCenter]} onPress={() => navigation.goBack()}>
             <Text style={[S.textSm, S.text]}>🔊 发音</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }

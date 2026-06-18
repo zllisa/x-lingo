@@ -1,17 +1,13 @@
-import * as FileSystem from 'expo-file-system';
+import RNFS from '@dr.pogodin/react-native-fs';
 import { GROQ_API_KEY } from '../constants/api';
-
 const ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
 export async function whisperSTT(fileUri: string): Promise<string> {
-  // Read file as base64, build a multipart-like body
-  const fileInfo = await FileSystem.getInfoAsync(fileUri);
-  if (!fileInfo.exists) throw new Error('Recording file not found');
+  // Check file exists
+  const exists = await RNFS.exists(fileUri);
+  if (!exists) throw new Error('Recording file not found');
 
-  // Use fetch with FormData-like approach for RN
-  const base64 = await FileSystem.readAsStringAsync(fileUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const base64 = await RNFS.readFile(fileUri, 'base64');
 
   // Build form data manually since RN FormData has limitations
   const boundary = '----WhisperBoundary' + Date.now();

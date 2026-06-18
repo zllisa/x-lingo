@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "klingo",
+    "newArchEnabled": false,
     "plugins": [
       "expo-router",
       "expo-av",
@@ -18,7 +19,7 @@
         "NSMicrophoneUsageDescription": "需要使用麦克风录制韩语语音",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.aalisa.koreanaibot"
+      "bundleIdentifier": "com.aalisa.klingo"
     },
     "android": {
       "adaptiveIcon": {
@@ -31,7 +32,8 @@
         "RECORD_AUDIO",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+      ],
+      "package": "com.aalisa.klingo"
     },
     "web": {
       "favicon": "./assets/favicon.png"

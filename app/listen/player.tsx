@@ -1,18 +1,33 @@
 import { View, Text, TouchableOpacity, FlatList, Switch } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useCallback, useRef } from 'react';
 import { useListenStore } from '../../stores/useListenStore';
+import { useProfileStore } from '../../stores/useProfileStore';
 import { S, C } from '../../utils/theme';
 
 export default function PlayerScreen() {
-  const router = useRouter();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { audioFiles, activeFileId, transcripts, showTranslation, toggleTranslation, playerSpeed, setSpeed, isPlaying, setPlaying, progress, transcriptIdx, setTranscriptIdx } = useListenStore();
   const file = audioFiles.find(f => f.id === activeFileId);
   const items = activeFileId ? transcripts[activeFileId] || [] : [];
 
+  // Study timer
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      timerRef.current = setInterval(() => {
+        useProfileStore.getState().addStudyMinute();
+      }, 60000);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [])
+  );
+
   return (
     <View style={S.flex1}>
-      <View style={[{ paddingTop: 12, paddingBottom: 8, paddingHorizontal: 16 }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
-        <TouchableOpacity onPress={() => { setPlaying(false); router.back(); }}><Text style={[S.textSm, S.textAccent, S.semibold]}>← 返回列表</Text></TouchableOpacity>
+      <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: 16 }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
+        <TouchableOpacity onPress={() => { setPlaying(false); navigation.goBack(); }}><Text style={[S.textSm, S.textAccent, S.semibold]}>← 返回列表</Text></TouchableOpacity>
         <Text style={[S.textSm, S.text2, { marginLeft: 12 }]} numberOfLines={1}>{file?.name || ''}</Text>
       </View>
       <View style={{ marginHorizontal: 16, marginTop: 16 }}>

@@ -1,0 +1,90 @@
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'korean-ai-bot' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true,
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+    )
+
+    # Fix 1: folly/coro/Coroutine.h stub
+    folly_headers_dir = File.join(installer.sandbox.root, 'ReactNativeDependencies', 'Headers', 'folly')
+    xc_folly_dir = File.join(installer.sandbox.root, 'ReactNativeDependencies', 'framework', 'packages', 'react-native', 'ReactNativeDependencies.xcframework', 'Headers', 'folly')
+    [folly_headers_dir, xc_folly_dir].each do |base|
+      coro_dir = File.join(base, 'coro')
+      coroutine_h = File.join(coro_dir, 'Coroutine.h')
+      unless File.exist?(coroutine_h)
+        FileUtils.mkdir_p(coro_dir)
+        File.write(coroutine_h, <<~HEADER)
+          #pragma once
+          #ifdef __cplusplus
+          #include <coroutine>
+          namespace folly::coro {
+            template <typename T> using coroutine_handle = std::coroutine_handle<T>;
+            struct suspend_never : std::suspend_never {};
+            inline bool detect_promise_return_object_eager_conversion() { return false; }
+          }
+          #endif
+        HEADER
+      end
+    end
+
+    # Fix 2: hermes/inspector/RuntimeAdapter.h stub
+    hermes_destroot = File.join(installer.sandbox.root, 'hermes-engine', 'destroot', 'include', 'hermes')
+    hermes_public   = File.join(installer.sandbox.root, 'Headers', 'Public', 'hermes-engine', 'hermes')
+    [hermes_destroot, hermes_public].each do |base|
+      inspector_dir = File.join(base, 'inspector')
+      adapter_h = File.join(inspector_dir, 'RuntimeAdapter.h')
+      unless File.exist?(adapter_h)
+        FileUtils.mkdir_p(inspector_dir)
+        File.write(adapter_h, <<~HEADER)
+          #pragma once
+          #include <hermes/hermes.h>
+          #include <memory>
+          namespace facebook::hermes::inspector_modern {
+          class RuntimeAdapter {
+           public:
+            virtual ~RuntimeAdapter() = default;
+            virtual facebook::hermes::HermesRuntime& getRuntime() = 0;
+            virtual void tickleJs();
+          };
+          }
+        HEADER
+      end
+    end
+
+    # Fix 3: safe-area-context C++ warnings
+    installer.pods_project.targets.each do |target|
+      if target.name == 'react-native-safe-area-context'
+        target.build_configurations.each do |config|
+          cflags = config.build_settings['WARNING_CFLAGS']
+          if cflags.is_a?(Array)
+            cflags << '-Wno-reorder-init-list' unless cflags.include?('-Wno-reorder-init-list')
+          end
+        end
+      end
+    end
+  end
+end

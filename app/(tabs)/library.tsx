@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Word } from '../../types';
@@ -39,7 +40,7 @@ export default function LibraryScreen() {
   );
 
   return (
-    <View style={[S.flex1, S.bg, S.px4, S.pt4]}>
+    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
       <View style={[S.row, S.bgSurface, S.roundedCard, { padding: 4 }, S.mb3]}>
         {(['words', 'sentences'] as const).map(tab => (
           <TouchableOpacity key={tab} style={[S.flex1, S.py2, S.roundedSM, S.itemsCenter, currentTab === tab ? S.bgAccent : undefined]} onPress={() => setTab(tab)}>
@@ -47,7 +48,7 @@ export default function LibraryScreen() {
           </TouchableOpacity>
         ))}
       </View>
-      <TextInput style={[S.bgSurface, S.border, S.roundedFull, S.px4, { paddingVertical: 10 }, S.textSm, S.text, S.mb3]} placeholder="🔍 搜索韩文或中文关键词..." placeholderTextColor={C.text3} value={searchQuery} onChangeText={setSearch} />
+      <TextInput style={[S.bgSurface, S.border, S.roundedFull, S.px4, { paddingVertical: 10 }, S.textSm, S.text, S.mb3]} placeholder="🔍 搜索韩文或中文关键词..." placeholderTextColor={C.text3} value={searchQuery} onChangeText={setSearch} autoCorrect={false} />
       <View style={[S.row, S.flexWrap, S.gap15, S.mb3]}>
         {['all', '常用', '外来词', '已掌握', '待复习'].map(f => (
           <TouchableOpacity key={f} style={[{ paddingHorizontal: 12, paddingVertical: 4 } as any, S.roundedFull, currentFilter === f ? [S.bgAccent15, S.borderAccent] as any : [S.bgSurface, S.border] as any]} onPress={() => setFilter(f)}>
@@ -78,6 +79,6 @@ export default function LibraryScreen() {
           </View>
         )} ListEmptyComponent={<Text style={[S.textCenter, S.text3, { paddingVertical: 40 }]}>暂无收藏句子</Text>} />
       )}
-    </View>
+    </View></SafeAreaView>
   );
 }

@@ -1,107 +1,191 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import RNFS from '@dr.pogodin/react-native-fs';
+import Share from 'react-native-share';
 import { useProfileStore } from '../../stores/useProfileStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { useSpeakStore } from '../../stores/useSpeakStore';
-import { useListenStore } from '../../stores/useListenStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useState } from 'react';
 import { S, C } from '../../utils/theme';
+import { RootStackParamList } from '../App';
 
-const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+const SUPERLATIVES = ['努力', '勤奋', '可爱', '元气', '认真', '温柔', '帅气', '聪明', '热情', '耐心', '刻苦', '自信', '执着', '励志', '自律'];
+const NOUNS = ['韩语达人', '学习家', '追梦人', '练习生', '留学党', '韩剧迷', 'K-pop粉', '语言控', '口语王', '字幕君', '文化通', '小能手', '小天才', '探索者', '旅行家'];
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { profile, checkinDays, toggleCheckin, settings, updateSettings } = useProfileStore();
+  const navigation = useNavigation<Nav>();
+  const { profile, checkinDates, todayStudyMinutes, canCheckinToday, toggleTodayCheckin, settings, updateSettings, setProfile } = useProfileStore();
+  const { isLoggedIn, email, logout } = useAuthStore();
   const chatHistory = useSpeakStore(s => s.chatHistory);
-  const audioFiles = useListenStore(s => s.audioFiles);
   const words = useLibraryStore(s => s.words);
   const sentences = useLibraryStore(s => s.sentences);
-  const today = new Date().getDay();
-  const todayIdx = today === 0 ? 6 : today - 1;
+  const [editNickname, setEditNickname] = useState(false);
+  const [nickInput, setNickInput] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
 
-  // Real stats
-  const speakRounds = Math.floor(chatHistory.length / 4) || 0;
-  const currentStreak = checkinDays.filter(Boolean).length;
-  const longestStreak = 12; // stored in profile store or computed historically
+  const randomNickname = () => {
+    const adj = SUPERLATIVES[Math.floor(Math.random() * SUPERLATIVES.length)];
+    const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+    return adj + '的' + noun;
+  };
+
+  const handleCheckin = () => {
+    if (canCheckinToday()) toggleTodayCheckin();
+  };
 
   const handleExport = async () => {
     try {
       const data = JSON.stringify({
-        profile, checkinDays, settings,
+        profile, checkinDates, settings,
         chatHistory: chatHistory.slice(-50),
-        audioFiles,
-        words,
-        sentences,
+        words, sentences,
         exportedAt: new Date().toISOString(),
       }, null, 2);
-      const path = FileSystem.documentDirectory + 'klingo_backup.json';
-      await FileSystem.writeAsStringAsync(path, data);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path);
-      } else {
-        Alert.alert('导出成功', `文件已保存到 ${path}`);
+      const path = RNFS.DocumentDirectoryPath + '/klingo_backup.json';
+      await RNFS.writeFile(path, data, 'utf8');
+      await Share.open({ url: 'file://' + path, type: 'application/json' });
+    } catch (e: any) {
+      if (e?.message !== 'User did not share') {
+        Alert.alert('导出失败', String(e));
       }
-    } catch (e) {
-      Alert.alert('导出失败', String(e));
     }
   };
 
+  const canCheckin = canCheckinToday();
+
   return (
-    <ScrollView style={[S.flex1, S.bg]} contentContainerStyle={[S.px4, S.pt4, { paddingBottom: 32 }]}>
-      <View style={[S.row, S.gap3, S.mb4]}>
-        <View style={[S.w14, S.roundedFull, { backgroundColor: 'rgba(124,92,252,0.2)' }, S.center]}>
-          <Text style={{ fontSize: 28 }}>👩‍🎓</Text>
+    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
+      <ScrollView style={[S.flex1, S.bg]} contentContainerStyle={[S.px4, S.pt4, { paddingBottom: 32 }]}>
+        {/* Profile header */}
+        <View style={[S.row, S.gap3, S.mb4]}>
+          <TouchableOpacity style={[S.w14, S.roundedFull, { backgroundColor: 'rgba(124,92,252,0.2)' }, S.center]} onPress={() => { setShowPicker(true); }}>
+            <Text style={{ fontSize: 28 }}>👩‍🎓</Text>
+          </TouchableOpacity>
+          <View style={S.flex1}>
+            <TouchableOpacity onPress={() => { setNickInput(profile.nickname); setEditNickname(true); }}>
+              <Text style={[S.textBase, S.bold, S.text]}>{profile.nickname} ✏️</Text>
+            </TouchableOpacity>
+            {isLoggedIn ? (
+              <Text style={[S.textXs, S.text3]}>{email}</Text>
+            ) : (
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={[S.textXs, S.textAccent]}>点击登录同步数据 →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        <View style={S.flex1}>
-          <Text style={[S.textBase, S.bold, S.text]}>{profile.nickname}</Text>
-          <Text style={[S.textXs, S.textAccent, S.semibold]}>{profile.level} · 中级</Text>
-          <Text style={[S.textXs, S.text3]}>🎯 目标：{profile.goal}</Text>
+
+        {/* Today checkin prompt */}
+        {canCheckin ? (
+          <TouchableOpacity style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.3)' }, S.roundedCard, S.p4, S.mb4, S.flexRow, S.spaceBetween, S.itemsCenter]} onPress={handleCheckin}>
+            <View>
+              <Text style={[S.textSm, S.textAccent, S.bold]}>🎯 今日已达 10 分钟</Text>
+              <Text style={[S.textXs, S.text3]}>已学 {todayStudyMinutes} 分钟，点击打卡</Text>
+            </View>
+            <View style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 16, paddingVertical: 8 }]}>
+              <Text style={[S.textWhite, S.semibold, S.textSm]}>打卡</Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.2)' }, S.roundedCard, S.p4, S.mb4]}>
+            <Text style={[S.textSm, S.textAccent, S.bold]}>📝 今日学习</Text>
+            <Text style={[S.textXs, S.text3, S.mt1]}>已学 {todayStudyMinutes} 分钟，满 10 分钟可打卡</Text>
+          </View>
+        )}
+
+        {/* Stats */}
+        <View style={[S.row, S.gap2, S.mb4]}>
+          {[
+            { v: String(checkinDates.length), l: '累计打卡', c: C.orange, onPress: () => navigation.navigate('Calendar') },
+            { v: String(todayStudyMinutes) + 'min', l: '今日学习', c: C.green },
+            { v: String(words.length), l: '生词收藏', c: C.accent },
+            { v: String(chatHistory.length), l: '对话消息', c: C.pink },
+          ].map(s => (
+            <TouchableOpacity key={s.l} style={[S.flex1, S.bgSurface, S.border, S.roundedCard, S.py3, S.itemsCenter]} onPress={s.onPress} disabled={!s.onPress}>
+              <Text style={[S.textXl, S.bold, { color: s.c }]}>{s.v}</Text>
+              <Text style={[S.textXs, S.text3, S.mt05]}>{s.l}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </View>
-      <View style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.2)' }, S.roundedCard, S.p4, S.mb4, S.flexRow, S.spaceBetween]}>
-        <View>
-          <Text style={[S.textSm, S.textAccent, S.bold]}>⭐ 个人使用</Text>
-          <Text style={[S.textXs, S.text3]}>功能开发中</Text>
-        </View>
-        <View style={[S.bgAccent15, S.roundedFull, { paddingHorizontal: 12, paddingVertical: 4 }]}><Text style={[S.textXs, S.textAccent]}>开发中</Text></View>
-      </View>
-      <Text style={[S.textSm, S.semibold, S.text, S.mb2]}>📅 本周打卡</Text>
-      <View style={[S.row, S.mb1]}>{DAY_LABELS.map(d => <View key={d} style={[S.flex1, S.itemsCenter, S.py1]}><Text style={[S.textXs, S.text3]}>{d}</Text></View>)}</View>
-      <View style={[S.row, S.mb4]}>
-        {checkinDays.map((checked, i) => (
-          <TouchableOpacity key={i} style={[S.flex1, S.aspect1, S.roundedFull, S.center, { marginHorizontal: 2 }, checked ? { backgroundColor: 'rgba(0,184,148,0.2)' } : undefined, i === todayIdx ? { borderWidth: 2, borderColor: C.accent } : undefined]} onPress={() => toggleCheckin(i)}>
-            <Text style={[S.textXs, checked ? [S.textGreen, S.bold] : S.text2]}>{checked ? '🔥' : i + 1}</Text>
+
+        {/* Learning records */}
+        <Text style={[S.textSm, S.semibold, S.text, S.mb2]}>📋 学习记录</Text>
+        {[{ icon: '💬', title: `最近对话 (${chatHistory.length} 条消息)`, time: chatHistory.length > 0 ? '今天' : '暂无' }].map((r, i) => (
+          <TouchableOpacity key={i} style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mb2, S.flexRow]}>
+            <Text style={[S.textXl, S.mr3]}>{r.icon}</Text>
+            <View style={S.flex1}><Text style={[S.textSm, S.text, { fontWeight: '500' }]}>{r.title}</Text><Text style={[S.textXs, S.text3, S.mt05]}>{r.time}</Text></View>
+            <Text style={S.text3}>›</Text>
           </TouchableOpacity>
         ))}
-      </View>
-      <View style={[S.row, S.gap2, S.mb4]}>
-        {[{ v: String(currentStreak), l: '连续打卡', c: C.orange }, { v: String(longestStreak), l: '最长连续', c: C.accent }, { v: String(speakRounds), l: '口语轮次', c: C.green }, { v: String(audioFiles.length), l: '精听素材', c: C.pink }].map(s => (
-          <View key={s.l} style={[S.flex1, S.bgSurface, S.border, S.roundedCard, S.py3, S.itemsCenter]}>
-            <Text style={[S.textXl, S.bold, { color: s.c }]}>{s.v}</Text>
-            <Text style={[S.textXs, S.text3, S.mt05]}>{s.l}</Text>
-          </View>
+
+        {/* Settings */}
+        <Text style={[S.textSm, S.semibold, S.text, { marginTop: 16 }, S.mb2]}>⚙️ 系统设置</Text>
+        {[
+          { label: '罗马音默认显示', right: settings.romaVisible ? '开启' : '关闭', onPress: () => updateSettings({ romaVisible: !settings.romaVisible }) },
+          { label: '音频播放语速', right: `${settings.playbackSpeed}×`, onPress: () => { const speeds = [0.5, 0.75, 1, 1.5, 2]; const idx = speeds.indexOf(settings.playbackSpeed); updateSettings({ playbackSpeed: speeds[(idx + 1) % speeds.length] }); } },
+          { label: '导出学习数据', right: '›', onPress: handleExport },
+          ...(isLoggedIn ? [{ label: `已登录：${email}`, right: '退出', onPress: () => { Alert.alert('退出登录', '确定要退出吗？', [{ text: '取消' }, { text: '确定', onPress: () => { logout(); navigation.reset({ index: 0, routes: [{ name: 'Login' }] }); } }]); } }] : []),
+        ].map((s, i) => (
+          <TouchableOpacity key={i} style={[S.spaceBetween, { paddingVertical: 14 }, S.borderBottom]} onPress={s.onPress}>
+            <Text style={[S.textSm, S.text]}>{s.label}</Text>
+            <Text style={[S.textSm, S.text2]}>{s.right}</Text>
+          </TouchableOpacity>
         ))}
-      </View>
-      <Text style={[S.textSm, S.semibold, S.text, S.mb2]}>📋 学习记录</Text>
-      {[{ icon: '💬', title: `最近对话 (${chatHistory.length} 条消息)`, time: chatHistory.length > 0 ? '今天' : '暂无' }, { icon: '🎧', title: `精听素材 (${audioFiles.length} 个)`, time: audioFiles.length > 0 ? audioFiles[0]?.date || '最近' : '暂无' }].map((r, i) => (
-        <TouchableOpacity key={i} style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mb2, S.flexRow]}>
-          <Text style={[S.textXl, S.mr3]}>{r.icon}</Text>
-          <View style={S.flex1}><Text style={[S.textSm, S.text, { fontWeight: '500' }]}>{r.title}</Text><Text style={[S.textXs, S.text3, S.mt05]}>{r.time}</Text></View>
-          <Text style={S.text3}>›</Text>
-        </TouchableOpacity>
-      ))}
-      <Text style={[S.textSm, S.semibold, S.text, { marginTop: 16 }, S.mb2]}>⚙️ 系统设置</Text>
-      {[
-        { label: '罗马音默认显示', right: settings.romaVisible ? '开启' : '关闭', onPress: () => updateSettings({ romaVisible: !settings.romaVisible }) },
-        { label: '音频播放语速', right: `${settings.playbackSpeed}×`, onPress: () => { const speeds = [0.5, 0.75, 1, 1.5, 2]; const idx = speeds.indexOf(settings.playbackSpeed); updateSettings({ playbackSpeed: speeds[(idx + 1) % speeds.length] }); } },
-        { label: '缓存清理', right: '128 MB', onPress: () => Alert.alert('缓存清理', '缓存已清理') },
-        { label: '导出学习数据', right: '›', onPress: handleExport },
-        { label: '意见反馈', right: '›', onPress: () => Alert.alert('反馈', '感谢您的反馈！') },
-      ].map((s, i) => (
-        <TouchableOpacity key={i} style={[S.spaceBetween, { paddingVertical: 14 }, S.borderBottom]} onPress={s.onPress}>
-          <Text style={[S.textSm, S.text]}>{s.label}</Text>
-          <Text style={[S.textSm, S.text2]}>{s.right}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+      </ScrollView>
+
+
+      {/* ── Nickname Edit Modal ── */}
+      <Modal visible={editNickname} transparent animationType="fade">
+        <View style={[S.flex1, S.center, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[S.bgSurface, S.roundedCard, { width: '80%' }, S.p5]}>
+            <Text style={[S.textBase, S.bold, S.text, S.mb3]}>修改昵称</Text>
+            <TextInput
+              style={[S.bgSurface2, S.border, S.roundedSM, S.px4, S.py3, S.textSm, S.text, S.mb3]}
+              value={nickInput}
+              onChangeText={setNickInput}
+              autoFocus
+            />
+            <TouchableOpacity style={[S.mb2]} onPress={() => setNickInput(randomNickname())}>
+              <Text style={[S.textXs, S.textAccent]}>🎲 随机生成一个</Text>
+            </TouchableOpacity>
+            <View style={[S.row, S.gap2]}>
+              <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.border, S.itemsCenter]} onPress={() => setEditNickname(false)}>
+                <Text style={[S.textSm, S.text]}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.bgAccent, S.itemsCenter]} onPress={() => { if (nickInput.trim()) { setProfile({ nickname: nickInput.trim() }); } setEditNickname(false); }}>
+                <Text style={[S.textSm, S.textWhite, S.semibold]}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Nickname Picker Modal ── */}
+      <Modal visible={showPicker} transparent animationType="slide">
+        <View style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '60%' as any }]}>
+            <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, S.px5, { paddingTop: 20, paddingBottom: 12 }]}>
+              <Text style={[S.textBase, S.bold, S.text]}>🎭 换个昵称</Text>
+              <TouchableOpacity onPress={() => setShowPicker(false)}><Text style={[S.textLg, S.text2]}>✕</Text></TouchableOpacity>
+            </View>
+            <ScrollView style={{ paddingHorizontal: 20, paddingBottom: 32 }}>
+              <TouchableOpacity style={[S.bgAccent, S.roundedCard, S.p4, S.itemsCenter, S.mb3]} onPress={() => { setNickInput(randomNickname()); setEditNickname(true); setShowPicker(false); }}>
+                <Text style={[S.textWhite, S.semibold, S.textSm]}>🎲 随机组合</Text>
+              </TouchableOpacity>
+              {SUPERLATIVES.flatMap(adj => NOUNS.map(noun => adj + '的' + noun)).slice(0, 30).map((name, i) => (
+                <TouchableOpacity key={i} style={[S.py2, S.borderBottom]} onPress={() => { setProfile({ nickname: name }); setShowPicker(false); }}>
+                  <Text style={[S.textSm, S.text]}>{name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }

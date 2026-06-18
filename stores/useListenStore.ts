@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AudioFile, TranscriptItem } from '../types';
-import { MOCK_AUDIO_FILES, MOCK_TRANSCRIPTS } from '../constants/mockData';
 
 interface ListenStore {
   audioFiles: AudioFile[];
@@ -29,9 +28,9 @@ interface ListenStore {
 export const useListenStore = create<ListenStore>()(
   persist(
     (set, get) => ({
-      audioFiles: MOCK_AUDIO_FILES,
+      audioFiles: [],
       activeFileId: null,
-      transcripts: MOCK_TRANSCRIPTS,
+      transcripts: {},
       showTranslation: false,
       playerSpeed: 1,
       isPlaying: false,
@@ -60,6 +59,8 @@ export const useListenStore = create<ListenStore>()(
     }),
     {
       name: 'listen-store',
+      version: 2,
+      migrate: () => ({ audioFiles: [], transcripts: {}, playerSpeed: 1, showTranslation: false }),
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },
         setItem: (k, v) => AsyncStorage.setItem(k, JSON.stringify(v)),

@@ -1,18 +1,23 @@
 import { View, Text, TouchableOpacity } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { SavedSentence } from '../../types';
 import { S, C } from '../../utils/theme';
+import { RootStackParamList } from '../App';
+
+type SentenceDetailRoute = RouteProp<RootStackParamList, 'SentenceDetail'>;
 
 export default function SentenceDetailModal() {
-  const router = useRouter();
-  const { text, source } = useLocalSearchParams<{ text: string; source: string }>();
+  const navigation = useNavigation();
+  const route = useRoute<SentenceDetailRoute>();
+  const text = route.params?.text ?? '';
+  const source = route.params?.source ?? '';
   const { sentences, addSentence } = useLibraryStore();
 
   const alreadySaved = sentences.some(s => s.ko === text);
 
   const handleSave = () => {
-    if (alreadySaved) { router.back(); return; }
+    if (alreadySaved) { navigation.goBack(); return; }
     const sen: SavedSentence = {
       id: Date.now().toString(),
       ko: text || '',
@@ -22,11 +27,11 @@ export default function SentenceDetailModal() {
       savedAt: Date.now(),
     };
     addSentence(sen);
-    router.back();
+    navigation.goBack();
   };
 
   return (
-    <View style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+    <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => navigation.goBack()}>
       <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
 
@@ -49,11 +54,11 @@ export default function SentenceDetailModal() {
           <TouchableOpacity style={[S.flex1, S.py3, S.roundedFull, alreadySaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter]} onPress={handleSave}>
             <Text style={[S.textSm, S.textWhite, S.semibold]}>{alreadySaved ? '✅ 已在收藏句库' : '⭐ 收藏句子'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.itemsCenter]} onPress={() => router.back()}>
+          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.itemsCenter]} onPress={() => navigation.goBack()}>
             <Text style={[S.textSm, S.text]}>🔊 整句朗读</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }

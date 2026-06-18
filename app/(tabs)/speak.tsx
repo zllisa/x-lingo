@@ -1,17 +1,22 @@
 import { View, Text, TouchableOpacity, FlatList } from 'react-native';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSpeakStore } from '../../stores/useSpeakStore';
 import { MOCK_TOPICS } from '../../constants/mockData';
 import { S, C } from '../../utils/theme';
+import { RootStackParamList } from '../App';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SpeakScreen() {
-  const router = useRouter();
+  const navigation = useNavigation<Nav>();
   const { mode, setMode, startTopic } = useSpeakStore();
 
-  const handleStartTopic = (topicId: string) => { startTopic(topicId); router.push('/speak/chat'); };
+  const handleStartTopic = (topicId: string) => { startTopic(topicId); navigation.navigate('Chat'); };
 
   return (
-    <View style={[S.flex1, S.bg, S.px4, S.pt4]}>
+    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
       <View style={[S.row, S.gap2, S.mb4]}>
         <TouchableOpacity style={[S.flex1, S.py25, S.roundedCard, S.itemsCenter, mode === 'topic' ? S.bgAccent : [S.bgSurface, S.border]]} onPress={() => setMode('topic')}>
           <Text style={[S.textXs, S.semibold, mode === 'topic' ? S.textWhite : S.text2]}>📋 话题对话</Text>
@@ -41,11 +46,11 @@ export default function SpeakScreen() {
           <Text style={[S.text6xl, S.mb3]}>🎭</Text>
           <Text style={[S.textLg, S.bold, S.text, S.mb2]}>自由对话</Text>
           <Text style={[S.textSm, S.text2, S.textCenter, S.leading6, S.mb4]}>无固定场景，支持闲聊、表达求助、日常问答。{'\n'}AI 陪练全程纯韩语回复。</Text>
-          <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 32, paddingVertical: 12 }]} onPress={() => { useSpeakStore.getState().startFreeConversation(); router.push('/speak/chat'); }}>
+          <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 32, paddingVertical: 12 }]} onPress={() => { useSpeakStore.getState().startFreeConversation(); navigation.navigate('Chat'); }}>
             <Text style={[S.textWhite, S.semibold, S.textSm]}>开始自由对话</Text>
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </View></SafeAreaView>
   );
 }

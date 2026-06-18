@@ -1,6 +1,5 @@
-import * as FileSystem from 'expo-file-system';
+import RNFS from '@dr.pogodin/react-native-fs';
 import { AZURE_TTS_KEY, AZURE_TTS_REGION } from '../constants/api';
-
 const ENDPOINT = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
 function buildSSML(text: string, speed: number = 1): string {
@@ -27,10 +26,10 @@ export async function azureTTS(text: string, speed: number = 1): Promise<string>
     throw new Error(`Azure TTS error: ${response.status}`);
   }
 
-  // Write audio to temp file for expo-av
+  // Write audio to temp file
   const arrayBuffer = await response.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-  const uri = FileSystem.cacheDirectory + `tts_${Date.now()}.mp3`;
-  await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+  const uri = RNFS.CachesDirectoryPath + `/tts_${Date.now()}.mp3`;
+  await RNFS.writeFile(uri, base64, 'base64');
   return uri;
 }
