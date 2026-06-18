@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "K-lingo",
+    "slug": "korean-ai-bot",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "klingo",
+    "plugins": [
+      "expo-router",
+      "expo-av",
+      "expo-document-picker"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "需要使用麦克风录制韩语语音",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.aalisa.koreanaibot"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "e439db18-41e7-43ef-98a8-1687b1308a17"
+      }
+    }
+  }
+}

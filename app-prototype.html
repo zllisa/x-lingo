@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>韩语学习 App — K-lingo</title>
+<style>
+/* ============================================================
+   Variables & Reset
+   ============================================================ */
+:root {
+  --bg: #f7f6fb;
+  --surface: #ffffff;
+  --surface2: #f0eef7;
+  --border: #e4e1f0;
+  --text: #1a1728;
+  --text2: #6b6886;
+  --text3: #a09db8;
+  --accent: #7c5cfc;
+  --accent-glow: rgba(124,92,252,.18);
+  --green: #00b894;
+  --red: #e17055;
+  --orange: #e67e22;
+  --pink: #e84393;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Noto Sans KR", sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font);
+  background: #e8e5f0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+.phone {
+  width: 390px;
+  height: 844px;
+  background: var(--bg);
+  border-radius: 32px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 0 2px #d5d2de, 0 0 0 6px #c8c4d4, 0 20px 60px rgba(0,0,0,.12);
+  position: relative;
+}
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 20px 12px;
+  flex-shrink: 0;
+}
+.app-header h2 { font-size: 18px; font-weight: 700; }
+.header-actions { display:flex; gap:14px; }
+.header-actions span { font-size:18px; cursor:pointer; opacity:.7; }
+.header-actions span:hover { opacity:1; }
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 16px 16px;
+  scroll-behavior: smooth;
+}
+.main-content::-webkit-scrollbar { width:0; }
+.tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 8px 8px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 20px;
+  transition: all .2s;
+  color: var(--text3);
+  font-size: 10px;
+  font-weight: 500;
+  border: none;
+  background: none;
+  font-family: var(--font);
+}
+.tab-item .tab-icon { font-size: 20px; }
+.tab-item.active { color: var(--accent); }
+
+/* ============================================================
+   Shared Components
+   ============================================================ */
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(124,92,252,.15);
+  color: #b39dfc;
+}
+.tag.green { background: rgba(78,205,196,.15); color: #63e6d6; }
+.tag.orange { background: rgba(255,169,77,.15); color: #ffc078; }
+.tag.pink { background: rgba(240,101,149,.15); color: #f78da7; }
+.tag.blue { background: rgba(91,141,239,.15); color: #74b9ff; }
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .2s;
+}
+.btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 16px var(--accent-glow); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--accent); }
+.btn-sm { padding: 6px 14px; font-size: 11px; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-icon-circle {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  font-family: var(--font);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-sheet {
+  background: var(--surface2);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 390px;
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: 20px;
+  animation: slideUp .25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-sheet .handle {
+  width: 36px; height: 4px;
+  background: var(--text3);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+.modal-sheet h3 { font-size: 16px; margin-bottom: 4px; }
+.modal-sheet .sub { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+.modal-sheet .ko-large {
+  font-size: 22px;
+  font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  color: var(--text);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 200;
+  animation: toastIn .3s ease, toastOut .3s ease 1.5s forwards;
+}
+@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+@keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* ============================================================
+   Tab 1: AI Speaking — Topic Select
+   ============================================================ */
+.mode-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mode-chip {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  transition: all .2s;
+  font-family: var(--font);
+}
+.mode-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.topic-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.topic-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.topic-card:hover { border-color: var(--accent); }
+.topic-card .topic-info h4 { font-size: 14px; margin-bottom: 2px; }
+.topic-card .topic-info span { font-size: 11px; color: var(--text3); }
+.topic-card .progress-badge {
+  font-size: 11px;
+  background: rgba(124,92,252,.2);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.custom-topic-area { margin-bottom: 12px; }
+.custom-topic-area input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.custom-topic-area input:focus { border-color: var(--accent); }
+.custom-topic-area .generated-qs { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.custom-topic-area .gq-chip {
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .2s;
+}
+.custom-topic-area .gq-chip:hover { border-color: var(--accent); }
+
+/* ============================================================
+   Chat View
+   ============================================================ */
+.chat-area { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+.chat-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  animation: msgIn .2s ease;
+}
+@keyframes msgIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.ai {
+  align-self: flex-start;
+  background: var(--surface2);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.chat-msg.ai .confirm-line {
+  color: var(--green);
+  font-size: 12px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.chat-msg .word {
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: all .15s;
+}
+.chat-msg .word:hover { background: rgba(0,0,0,.06); }
+.chat-msg.user .word:hover { background: rgba(255,255,255,.2); }
+
+/* Chat input bar */
+.input-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+.input-bar input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.input-bar input:focus { border-color: var(--accent); }
+.input-bar .icon-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  font-family: var(--font);
+}
+.input-bar .icon-btn:active { transform: scale(.95); }
+.input-bar .send-btn { background: var(--accent); color: #fff; }
+
+/* ============================================================
+   Voice Recording Overlay (full bottom sheet)
+   ============================================================ */
+.voice-overlay {
+  display: none;
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface2);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px 32px;
+  z-index: 60;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: slideUp .3s ease;
+}
+.voice-overlay.active { display: flex; }
+.voice-overlay .voice-state-label {
+  font-size: 12px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.voice-overlay .voice-timer {
+  font-size: 32px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.voice-overlay .voice-timer.recording { color: var(--red); }
+.voice-overlay .voice-timer.paused { color: var(--orange); }
+
+/* Waveform animation */
+.voice-waves {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 48px;
+}
+.voice-waves .bar {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: height .15s ease;
+}
+.voice-waves.recording .bar { animation: wave .6s ease-in-out infinite; }
+.voice-waves.recording .bar:nth-child(1) { animation-delay: 0s; }
+.voice-waves.recording .bar:nth-child(2) { animation-delay: .08s; }
+.voice-waves.recording .bar:nth-child(3) { animation-delay: .16s; }
+.voice-waves.recording .bar:nth-child(4) { animation-delay: .24s; }
+.voice-waves.recording .bar:nth-child(5) { animation-delay: .32s; }
+.voice-waves.recording .bar:nth-child(6) { animation-delay: .4s; }
+.voice-waves.recording .bar:nth-child(7) { animation-delay: .48s; }
+.voice-waves.paused .bar { animation-play-state: paused; }
+@keyframes wave {
+  0%, 100% { height: 8px; opacity: .4; }
+  50% { height: 36px; opacity: 1; }
+}
+
+/* Voice draft review */
+.voice-draft-area {
+  display: none;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+}
+.voice-draft-area.active { display: flex; }
+.voice-draft-box {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  min-height: 48px;
+  line-height: 1.6;
+  outline: none;
+  font-family: var(--font);
+}
+.voice-draft-box:focus { border-color: var(--accent); }
+.voice-draft-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.voice-draft-actions button { flex: 1; }
+
+.voice-controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+.voice-controls .vc-btn {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.voice-controls .vc-btn.record { width: 64px; height: 64px; background: var(--red); border-color: var(--red); color: #fff; font-size: 22px; }
+.voice-controls .vc-btn.record.paused { background: var(--orange); border-color: var(--orange); }
+.voice-controls .vc-btn.start-record { width: 72px; height: 72px; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 26px; box-shadow: 0 4px 20px var(--accent-glow); }
+.voice-controls .vc-btn.cancel { border-color: var(--red); color: var(--red); }
+
+/* ============================================================
+   Tab 2: Listening — List View
+   ============================================================ */
+.listen-fab {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
+}
+.listen-fab button {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 24px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transition: all .2s;
+  font-family: var(--font);
+}
+.listen-fab button:active { transform: scale(.95); }
+
+.audio-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.audio-list-item:hover { border-color: var(--accent); }
+.audio-list-item .file-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: rgba(124,92,252,.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.audio-list-item .file-info { flex: 1; min-width: 0; }
+.audio-list-item .file-info h4 { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.audio-list-item .file-info p { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.audio-list-item .file-arrow { color: var(--text3); font-size: 16px; }
+
+/* Upload zone (inside add flow) */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  margin-bottom: 12px;
+}
+.upload-zone:hover { border-color: var(--accent); background: rgba(124,92,252,.05); }
+.upload-zone .upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-zone p { font-size: 12px; color: var(--text3); }
+
+/* Progress bar */
+.progress-bar-wrap {
+  background: var(--surface);
+  border-radius: 8px;
+  height: 6px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 8px;
+  transition: width .3s;
+  width: 0%;
+}
+
+/* ============================================================
+   Listening Detail View (Player + Transcript)
+   ============================================================ */
+.player-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 10px 0;
+}
+.player-controls button {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.player-controls .btn-play { width: 48px; height: 48px; background: var(--accent); font-size: 18px; }
+.player-speed {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px 0;
+}
+.player-speed button {
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font);
+}
+.player-speed button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.player-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 8px 0;
+  cursor: pointer;
+  position: relative;
+}
+.player-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width .1s linear;
+}
+.player-time { display:flex; justify-content:space-between; font-size:10px; color:var(--text3); }
+.transcript-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all .15s;
+  border-left: 3px solid transparent;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+.transcript-item.active { background: rgba(124,92,252,.1); border-left-color: var(--accent); }
+.transcript-item .time { font-size: 10px; color: var(--text3); margin-right: 8px; }
+.transcript-item .translation { display: none; font-size: 11px; color: var(--text3); margin-top: 4px; }
+.transcript-item .translation.show { display: block; margin-left: 40px; }
+.transcript-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.transcript-toggle input[type=checkbox] { accent-color: var(--accent); }
+
+/* ============================================================
+   Tab 3: Learning Library
+   ============================================================ */
+.lib-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 10px;
+}
+.lib-tab {
+  flex: 1;
+  padding: 8px;
+  text-align: center;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-family: var(--font);
+  transition: all .2s;
+}
+.lib-tab.active { background: var(--accent); color: #fff; }
+
+/* Section grouping */
+.lib-section {
+  margin-bottom: 16px;
+}
+.lib-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  user-select: none;
+}
+.lib-section-header .count { font-size: 11px; color: var(--text3); }
+.lib-section-header .arrow { transition: transform .2s; font-size: 10px; }
+.lib-section-header.collapsed .arrow { transform: rotate(-90deg); }
+.lib-section-body { transition: all .3s; }
+.lib-section-body.collapsed { display: none; }
+
+/* Search + sort bar */
+.lib-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.lib-toolbar input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.lib-toolbar input:focus { border-color: var(--accent); }
+.lib-toolbar select {
+  padding: 8px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+}
+
+.filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.filter-chip {
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 11px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  transition: all .2s;
+  font-family: var(--font);
+}
+.filter-chip.active { background: rgba(124,92,252,.2); border-color: var(--accent); color: var(--accent); }
+
+/* Word card */
+.word-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all .3s;
+  position: relative;
+}
+.word-card .word-front .ko-word {
+  font-size: 20px;
+  font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+}
+.word-card .roma { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.word-card .word-back { display: none; }
+.word-card.flipped .word-front { display: none; }
+.word-card.flipped .word-back { display: block; }
+.word-card .pos-tag { margin: 4px 0; }
+.word-card .meaning { font-size: 14px; color: var(--text); margin: 4px 0; }
+.word-card .example { font-size: 12px; color: var(--text2); font-style: italic; }
+.word-card .source { font-size: 10px; color: var(--text3); margin-top: 6px; }
+.word-card .mastered-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: .4;
+  transition: all .2s;
+}
+.word-card .mastered-btn:hover { opacity: 1; }
+
+/* Sentence card */
+.sentence-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.sentence-card .ko-sentence {
+  font-size: 15px;
+  font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  margin-bottom: 4px;
+}
+.sentence-card .sentence-meta { font-size: 11px; color: var(--text3); }
+
+/* ============================================================
+   Tab 4: Profile
+   ============================================================ */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+}
+.profile-avatar {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--pink));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+.profile-info h3 { font-size: 16px; }
+.profile-info .level { font-size: 12px; color: var(--accent); font-weight: 600; }
+.profile-info .goal { font-size: 11px; color: var(--text3); }
+
+.member-card {
+  background: linear-gradient(135deg, rgba(124,92,252,.12), rgba(240,101,149,.08));
+  border: 1px solid rgba(124,92,252,.2);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.member-card .member-info h4 { font-size: 14px; }
+.member-card .member-info p { font-size: 11px; color: var(--text3); }
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.calendar .day-label { font-size: 10px; color: var(--text3); padding: 4px 0; }
+.calendar .day-cell {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .2s;
+}
+.calendar .day-cell.checked { background: rgba(78,205,196,.2); color: var(--green); font-weight: 700; }
+.calendar .day-cell.today { border: 2px solid var(--accent); }
+
+.stats-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.stat-box {
+  flex: 1;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+.stat-box .stat-value { font-size: 22px; font-weight: 700; }
+.stat-box .stat-label { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.history-item:hover { border-color: var(--accent); }
+.history-item .history-icon { font-size: 22px; flex-shrink: 0; }
+.history-item .history-info { flex:1; }
+.history-item .history-info h4 { font-size: 13px; }
+.history-item .history-info p { font-size: 11px; color: var(--text3); }
+
+.settings-list { margin-top: 20px; }
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.setting-item .toggle {
+  width: 44px; height: 26px;
+  border-radius: 13px;
+  background: var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: all .2s;
+}
+.setting-item .toggle.on { background: var(--accent); }
+.setting-item .toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: all .2s;
+}
+.setting-item .toggle.on::after { left: 21px; }
+
+.first-guide-overlay {
+  display: none;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.85);
+  z-index: 50;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  border-radius: 32px;
+}
+.first-guide-overlay.active { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="phone" id="app">
+  <div class="status-bar">
+    <span class="time">9:41</span>
+    <span class="status-icons">📶 🔋 91%</span>
+  </div>
+  <div class="app-header">
+    <h2 id="pageTitle">AI 口语对练</h2>
+    <div class="header-actions">
+      <span id="btnClearChat" style="display:none;cursor:pointer;">🗑️</span>
+    </div>
+  </div>
+  <div class="main-content" id="mainContent"></div>
+  <div class="tab-bar">
+    <button class="tab-item active" data-tab="speak"><span class="tab-icon">💬</span>口语</button>
+    <button class="tab-item" data-tab="listen"><span class="tab-icon">🎧</span>精听</button>
+    <button class="tab-item" data-tab="library"><span class="tab-icon">📚</span>学习库</button>
+    <button class="tab-item" data-tab="profile"><span class="tab-icon">👤</span>我的</button>
+  </div>
+
+  <!-- Voice recording overlay -->
+  <div class="voice-overlay" id="voiceOverlay">
+    <div class="voice-state-label" id="voiceStateLabel">点击开始录音</div>
+    <div class="voice-timer" id="voiceTimer">00:00</div>
+    <div class="voice-waves" id="voiceWaves">
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+    <!-- Recording controls — different layouts per state -->
+    <div class="voice-controls" id="voiceControls">
+      <!-- ready state: cancel + big start button -->
+      <button class="vc-btn cancel" id="btnVoiceCancel" title="取消">✕</button>
+      <button class="vc-btn start-record" id="btnVoiceStart" title="开始录音">▶</button>
+      <!-- recording/paused state buttons (hidden initially) -->
+      <button class="vc-btn pause-btn" id="btnVoicePause" title="暂停" style="display:none;">⏸</button>
+      <button class="vc-btn record recording-btn" id="btnVoiceRecord" title="停止录音" style="display:none;">⏹</button>
+    </div>
+    <!-- Draft review (hidden initially) -->
+    <div class="voice-draft-area" id="voiceDraftArea">
+      <div style="font-size:12px;color:var(--text3);">📝 语音转文字草稿，确认或修改后发送：</div>
+      <div class="voice-draft-box" id="voiceDraftBox" contenteditable="true"></div>
+      <div class="voice-draft-actions">
+        <button class="btn btn-outline btn-sm" id="btnReRecord">🔄 重新录制</button>
+        <button class="btn btn-primary btn-sm" id="btnSendDraft">📤 确认发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Word / Sentence modals -->
+  <div class="modal-overlay" id="wordModal" style="display:none;">
+    <div class="modal-sheet" id="wordModalContent"></div>
+  </div>
+  <div class="modal-overlay" id="sentenceModal" style="display:none;">
+    <div class="modal-sheet" id="sentenceModalContent"></div>
+  </div>
+
+  <!-- First-time guide -->
+  <div class="first-guide-overlay" id="firstGuide">
+    <div style="width:100%;max-width:340px;background:var(--surface2);border-radius:20px;padding:32px 24px;text-align:center;animation:slideUp .25s ease;">
+      <div style="font-size:48px;margin-bottom:12px;">🇰🇷</div>
+      <h3 style="margin-bottom:8px;">沉浸式全韩语对话</h3>
+      <p style="color:var(--text2);font-size:13px;line-height:1.8;margin-bottom:6px;">在此模式下，AI 将<strong>全韩语回复</strong>。</p>
+      <p style="color:var(--text2);font-size:13px;line-height:1.8;margin-bottom:6px;">若完全看不懂，请<strong>点击句子</strong>使用「整句翻译」弹窗。</p>
+      <p style="color:var(--text2);font-size:13px;line-height:1.8;margin-bottom:20px;">点击任意<strong>韩文单词</strong>可查看释义。</p>
+      <button class="btn btn-primary" onclick="closeFirstGuide()" style="width:100%;">我知道了，开始学习</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+const state = {
+  activeTab: 'speak',
+  speakMode: 'topic',
+  activeTopic: null,
+  chatHistory: [],
+
+  // Voice recording
+  voiceState: 'idle', // idle | recording | paused | reviewing
+  voiceSeconds: 0,
+  voiceTimerInterval: null,
+
+  // Topics (no membership/locked topics — personal use)
+  topics: [
+    { id:1, name:'일상 대화', cn:'日常生活', icon:'🏠', progress:'1/3', questions:['오늘 뭐 했어요?','주말에 보통 뭐 해요?','아침에 뭐 먹었어요?'] },
+    { id:2, name:'직장 한국어', cn:'职场韩语', icon:'💼', progress:'0/3', questions:['어떤 일을 하세요?','회의는 몇 시에 시작해요?','이 서류 좀 확인해 주세요.'] },
+    { id:3, name:'TOPIK 말하기', cn:'TOPIK 口语备考', icon:'📝', progress:'0/3', questions:['자기소개를 해 주세요.','한국어를 공부하는 이유가 뭐예요?','한국 문화에 대해 어떻게 생각해요?'] },
+  ],
+
+  // Listening — saved audio files
+  audioFiles: [
+    { id:1, name:'coffee_menu_intro.mp3', duration:'00:48', date:'2026-06-18', icon:'🎵' },
+    { id:2, name:'한국어 인터뷰 - 마케팅 팀.mp4', duration:'03:22', date:'2026-06-17', icon:'🎬' },
+    { id:3, name:'TOPIK 듣기 12회.mp3', duration:'02:15', date:'2026-06-15', icon:'🎵' },
+  ],
+  activeAudioFile: null,
+  showTranslation: false,
+  playerSpeed: 1,
+  isPlaying: false,
+  playerInterval: null,
+  playerProgress: 0,
+  transcriptIdx: 0,
+
+  // Transcript data (keyed by audio file id)
+  transcripts: {
+    1: [
+      { time:'00:12', ko:'안녕하세요, 오늘은 새로운 coffee 메뉴를 소개해 드리겠습니다.', zh:'大家好，今天我来介绍新的咖啡菜单。' },
+      { time:'00:18', ko:'이 메뉴는 정말 special 하고 맛있어요.', zh:'这个菜单真的很特别而且好吃。' },
+      { time:'00:24', ko:'먼저, 아이스 아메리카노는 기본이죠.', zh:'首先，冰美式是基本的。' },
+      { time:'00:30', ko:'그리고 저희만의 signature 라떼도 준비되어 있습니다.', zh:'而且我们也准备了独家招牌拿铁。' },
+      { time:'00:37', ko:'가격은 매우 reasonable 하게 책정했어요.', zh:'价格定得非常合理。' },
+      { time:'00:42', ko:'많이 찾아주시고 즐거운 시간 보내세요!', zh:'请多多光临，祝大家度过愉快时光！' },
+    ],
+    2: [
+      { time:'00:08', ko:'오늘 인터뷰에 응해 주셔서 감사합니다.', zh:'感谢您今天接受采访。' },
+      { time:'00:15', ko:'저희 마케팅 팀은 creative 한 아이디어로 유명하죠.', zh:'我们营销团队以创意点子闻名。' },
+      { time:'00:24', ko:'이번 프로젝트의 key point 는 무엇인가요?', zh:'这次项目的关键点是什么？' },
+    ],
+    3: [
+      { time:'00:05', ko:'다음 대화를 잘 듣고 질문에 답하세요.', zh:'请仔细听以下对话并回答问题。' },
+      { time:'00:12', ko:'여행 계획에 대해 이야기하고 있습니다.', zh:'正在讨论旅行计划。' },
+    ],
+  },
+
+  // Library
+  words: [
+    { id:1, ko:'가다', base:'가다', roma:'ga-da', pos:'동사 (动词)', meaning:'去，走', example:'학교에 가요.', source:'AI 口语对话 · 日常生活', tags:['常用'], mastered:false, isLoanword:false, section:'speak' },
+    { id:2, ko:'커피', base:'커피', roma:'keo-pi', pos:'명사 (名词)', meaning:'咖啡', example:'커피 한 잔 주세요.', source:'音视频精听 · coffee_menu', tags:['外来词'], mastered:false, isLoanword:true, section:'listen' },
+    { id:3, ko:'맛있다', base:'맛있다', roma:'ma-sit-da', pos:'형용사 (形容词)', meaning:'好吃，美味', example:'이 김치 정말 맛있어요!', source:'AI 口语对话 · 日常生活', tags:['常用'], mastered:false, isLoanword:false, section:'speak' },
+    { id:4, ko:'공부하다', base:'공부하다', roma:'gong-bu-ha-da', pos:'동사 (动词)', meaning:'学习', example:'매일 한국어를 공부해요.', source:'AI 口语对话 · TOPIK', tags:['常用'], mastered:true, isLoanword:false, section:'speak' },
+    { id:5, ko:'special', base:'special', roma:'seu-pe-syeol', pos:'외래어 (外来词)', meaning:'特别的', example:'이건 정말 special 해요.', source:'音视频精听 · coffee_menu', tags:['外来词'], mastered:false, isLoanword:true, section:'listen' },
+    { id:6, ko:'signature', base:'signature', roma:'si-geu-ni-cheo', pos:'외래어 (外来词)', meaning:'招牌，标志性的', example:'저희 signature 메뉴예요.', source:'音视频精听 · coffee_menu', tags:['外来词'], mastered:false, isLoanword:true, section:'listen' },
+    { id:7, ko:'creative', base:'creative', roma:'keu-ri-e-i-ti-beu', pos:'외래어 (外来词)', meaning:'创意的', example:'creative 한 아이디어', source:'音视频精听 · 인터뷰', tags:['外来词'], mastered:false, isLoanword:true, section:'listen' },
+  ],
+  sentences: [
+    { id:1, ko:'오늘은 새로운 coffee 메뉴를 소개해 드리겠습니다.', source:'音视频精听 · coffee_menu', zh:'今天我来介绍新的咖啡菜单。', section:'listen' },
+    { id:2, ko:'내일 친구랑 카페에 가고 싶으신 거예요?', source:'AI 口语对话 · 日常生活', zh:'您明天想和朋友去咖啡厅吗？', section:'speak' },
+    { id:3, ko:'한국어를 공부하는 이유가 뭐예요?', source:'AI 口语对话 · TOPIK', zh:'您学习韩语的原因是什么？', section:'speak' },
+    { id:4, ko:'이번 프로젝트의 key point 는 무엇인가요?', source:'音视频精听 · 인터뷰', zh:'这次项目的关键点是什么？', section:'listen' },
+  ],
+  wordSectionsCollapsed: {},
+  sentenceSectionsCollapsed: {},
+  currentLibTab: 'words',
+  currentFilter: 'all',
+  currentSort: 'newest',
+
+  // Calendar (Mon-Sun)
+  checkinDays: [true, true, true, false, true, false, false],
+  settings: { roma: false, speed: 1.0 },
+};
+
+// ============================================================
+// Init
+// ============================================================
+function init() {
+  renderTab('speak');
+  bindTabs();
+  bindGlobalClicks();
+  setTimeout(() => showFirstGuide(), 500);
+}
+
+function bindTabs() {
+  document.querySelectorAll('.tab-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.activeTab = btn.dataset.tab;
+      // Reset listening detail when switching away
+      if (state.activeTab !== 'listen') {
+        stopPlayer();
+        state.activeAudioFile = null;
+      }
+      renderTab(state.activeTab);
+    });
+  });
+}
+
+function bindGlobalClicks() {
+  document.getElementById('wordModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModals();
+  });
+  document.getElementById('sentenceModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModals();
+  });
+}
+
+// ============================================================
+// Render router
+// ============================================================
+function renderTab(tab) {
+  const mc = document.getElementById('mainContent');
+  const title = document.getElementById('pageTitle');
+  const btnCl = document.getElementById('btnClearChat');
+  btnCl.style.display = 'none';
+
+  // Clean up voice overlay
+  stopVoiceRecording();
+  document.getElementById('voiceOverlay').classList.remove('active');
+  // Remove old dynamic input bar
+  const oldIb = document.getElementById('chatInputBar');
+  if (oldIb) oldIb.remove();
+  const oldVd = document.getElementById('voiceDraftWrapper');
+  if (oldVd) oldVd.remove();
+
+  switch(tab) {
+    case 'speak':
+      title.textContent = state.activeTopic
+        ? (state.topics.find(t=>t.id===state.activeTopic)?.cn || '自由对话')
+        : 'AI 口语对练';
+      mc.innerHTML = renderSpeakPage();
+      bindSpeakEvents();
+      if (state.activeTopic) {
+        renderInputBar();
+        btnCl.style.display = state.chatHistory.length > 0 ? 'inline' : 'none';
+        btnCl.onclick = () => { state.chatHistory = []; state.activeTopic = null; renderTab('speak'); };
+        if (state.chatHistory.length > 0) scrollToBottom();
+      }
+      break;
+    case 'listen':
+      title.textContent = state.activeAudioFile ? '精听详情' : '精听跟读';
+      mc.innerHTML = renderListenPage();
+      bindListenEvents();
+      break;
+    case 'library':
+      title.textContent = '学习库';
+      mc.innerHTML = renderLibraryPage();
+      bindLibraryEvents();
+      break;
+    case 'profile':
+      title.textContent = '我的';
+      mc.innerHTML = renderProfilePage();
+      bindProfileEvents();
+      break;
+  }
+  mc.scrollTop = 0;
+}
+
+// ============================================================
+// TAB 1: AI Speaking
+// ============================================================
+function renderSpeakPage() {
+  if (state.activeTopic) return renderChatView();
+  return renderTopicSelect();
+}
+
+function renderTopicSelect() {
+  let html = '';
+  html += `<div class="mode-selector">
+    <button class="mode-chip ${state.speakMode==='topic'?'active':''}" data-mode="topic">📋 话题对话</button>
+    <button class="mode-chip ${state.speakMode==='free'?'active':''}" data-mode="free">🎭 自由对话</button>
+  </div>`;
+
+  if (state.speakMode === 'topic') {
+    html += `<div class="topic-grid">`;
+    state.topics.forEach(t => {
+      html += `<div class="topic-card" data-topic-id="${t.id}">
+        <div class="topic-info">
+          <h4>${t.icon} ${t.name} <span style="font-size:11px;color:var(--text3);">${t.cn}</span></h4>
+          <span>3 个阶段任务</span>
+        </div>
+        <span class="progress-badge">${t.progress}</span>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<div class="custom-topic-area">
+      <input type="text" id="customTopicInput" placeholder="💡 输入中文话题名，AI 自动生成开场问题...">
+      <div class="generated-qs" id="generatedQs"></div>
+    </div>`;
+  } else {
+    html += `<div style="text-align:center;padding:40px 20px;">
+      <div style="font-size:64px;margin-bottom:12px;">🎭</div>
+      <h3 style="margin-bottom:8px;">自由对话</h3>
+      <p style="color:var(--text2);font-size:13px;line-height:1.6;">无固定场景，支持闲聊、表达求助、日常问答。<br>AI 陪练全程纯韩语回复。</p>
+      <button class="btn btn-primary" id="btnStartFree" style="margin-top:20px;">开始自由对话</button>
+    </div>`;
+  }
+  return html;
+}
+
+function renderChatView() {
+  let html = '';
+  const topic = state.topics.find(t => t.id === state.activeTopic);
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <button class="btn btn-outline btn-sm" id="btnBackTopics">← 返回</button>
+    <span style="font-size:12px;color:var(--text2);">${topic ? topic.icon + ' ' + topic.name : '自由对话'}</span>
+    <span class="tag green" style="margin-left:auto;">AI 全韩语回复</span>
+  </div>`;
+  html += `<div class="chat-area" id="chatArea">`;
+  state.chatHistory.forEach((msg, idx) => {
+    html += renderChatMessage(msg, idx);
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderChatMessage(msg, idx) {
+  if (msg.type === 'user') {
+    return `<div class="chat-msg user" data-idx="${idx}" onclick="openSentenceModal(event, ${idx}, 'user')">${makeWordsClickable(msg.text)}</div>`;
+  } else {
+    let inner = '';
+    if (msg.confirmLine) {
+      inner += `<div class="confirm-line">${msg.confirmLine}</div>`;
+    }
+    inner += msg.text;
+    return `<div class="chat-msg ai" data-idx="${idx}" onclick="openSentenceModal(event, ${idx}, 'ai')">${makeWordsClickable(inner)}</div>`;
+  }
+}
+
+function makeWordsClickable(text) {
+  return text.split(/(\s+)/).map(part => {
+    if (part.trim() === '') return part;
+    if (/[가-힣a-zA-Z]/.test(part)) {
+      return `<span class="word" onclick="event.stopPropagation();openWordPopup('${part.replace(/'/g, "\\'")}')">${part}</span>`;
+    }
+    return part;
+  }).join('');
+}
+
+function scrollToBottom() {
+  setTimeout(() => {
+    const mc = document.getElementById('mainContent');
+    mc.scrollTop = mc.scrollHeight;
+  }, 100);
+}
+
+// --- Speak Events ---
+function bindSpeakEvents() {
+  document.querySelectorAll('.mode-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      state.speakMode = this.dataset.mode;
+      renderTab('speak');
+    });
+  });
+
+  document.querySelectorAll('.topic-card').forEach(card => {
+    card.addEventListener('click', function() {
+      const tid = parseInt(this.dataset.topicId);
+      state.activeTopic = tid;
+      state.chatHistory = [];
+      const topic = state.topics.find(t => t.id === tid);
+      if (topic && topic.questions.length > 0) {
+        state.chatHistory.push({ type: 'ai', text: topic.questions[0], confirmLine: null });
+      }
+      renderTab('speak');
+    });
+  });
+
+  const customInput = document.getElementById('customTopicInput');
+  if (customInput) {
+    customInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && this.value.trim()) {
+        generateCustomQuestions(this.value.trim());
+      }
+    });
+  }
+
+  const btnFree = document.getElementById('btnStartFree');
+  if (btnFree) {
+    btnFree.addEventListener('click', () => {
+      state.activeTopic = 'free';
+      state.chatHistory = [{ type: 'ai', text: '안녕하세요! 무슨 이야기를 하고 싶으세요?', confirmLine: null }];
+      renderTab('speak');
+    });
+  }
+
+  const btnBack = document.getElementById('btnBackTopics');
+  if (btnBack) {
+    btnBack.addEventListener('click', () => {
+      state.activeTopic = null;
+      state.chatHistory = [];
+      renderTab('speak');
+    });
+  }
+
+  // Word clicks
+  document.querySelectorAll('.word').forEach(w => {
+    w.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openWordPopup(this.textContent);
+    });
+  });
+}
+
+// --- Input Bar (dynamic) ---
+function renderInputBar() {
+  // Only show mic button when in a chat conversation
+  if (!state.activeTopic) return;
+  const mc = document.getElementById('mainContent');
+  let ib = document.createElement('div');
+  ib.id = 'chatInputBar';
+  ib.className = 'input-bar';
+  ib.style.justifyContent = 'center';
+  ib.innerHTML = `
+    <button class="icon-btn" id="btnVoiceOpen" title="语音输入" style="width:56px;height:56px;font-size:24px;background:var(--accent);color:#fff;box-shadow:0 4px 20px var(--accent-glow);">🎤</button>
+  `;
+  mc.parentNode.insertBefore(ib, mc.nextSibling);
+  ib.style.display = 'flex';
+  bindInputBarEvents();
+}
+
+function bindInputBarEvents() {
+  const btnVoice = document.getElementById('btnVoiceOpen');
+  if (!btnVoice) return;
+  btnVoice.addEventListener('click', () => openVoiceOverlay());
+}
+
+// --- Send message ---
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  state.chatHistory.push({ type: 'user', text, confirmLine: null });
+  input.value = '';
+
+  const hasKorean = /[가-힣]/.test(text);
+  const hasChinese = /[一-鿿]/.test(text);
+  const hasEnglish = /[a-zA-Z]{2,}/.test(text);
+  let scenario = (!hasKorean && (hasChinese || hasEnglish)) || (hasChinese && hasKorean) ? 'A' : 'B';
+
+  setTimeout(() => {
+    let aiMsg;
+    if (scenario === 'A') {
+      aiMsg = { type: 'ai', confirmLine: '이거 맞죠?', text: getScenarioAResponse(text) };
+    } else {
+      aiMsg = { type: 'ai', text: getScenarioBResponse(text), confirmLine: null };
+    }
+    state.chatHistory.push(aiMsg);
+    renderTab('speak');
+    scrollToBottom();
+  }, 600 + Math.random() * 800);
+
+  renderTab('speak');
+  scrollToBottom();
+}
+
+function getScenarioAResponse(input) {
+  const r = ['내일 친구랑 카페에 가고 싶으신 거예요?','한국어로 그 표현을 알고 싶으신 거군요.','지금 말씀하신 내용을 한국어로 표현해 드릴게요.','아, 그런 상황에서는 이렇게 말하면 돼요.','한국에서는 보통 그렇게 말해요. 따라해 보세요.'];
+  return r[Math.floor(Math.random()*r.length)];
+}
+function getScenarioBResponse(input) {
+  const r = ['아, 그렇군요! 저도 coffee 좋아해요. 요즘 어떤 커피 많이 드세요?','네, 맞아요. 한국어 정말 잘하시네요!','재미있는 이야기네요. 더 자세히 들려주세요.','그렇군요. 저도 그렇게 생각해요.','와, 정말요? 구체적으로 어떤 상황이었는지 궁금해요.'];
+  return r[Math.floor(Math.random()*r.length)];
+}
+
+function generateCustomQuestions(topic) {
+  const qs = [`${topic}에 대해 어떻게 생각하세요?`,`${topic} 경험이 있으세요?`,`${topic} 관련해서 가장 좋아하는 게 뭐예요?`];
+  const container = document.getElementById('generatedQs');
+  if (container) {
+    container.innerHTML = qs.map((q,i) => `<div class="gq-chip" data-q="${q.replace(/"/g,'&quot;')}">💬 ${q}</div>`).join('');
+    container.querySelectorAll('.gq-chip').forEach(chip => {
+      chip.addEventListener('click', function() {
+        const q = this.dataset.q;
+        state.activeTopic = 'custom';
+        state.chatHistory = [{ type: 'ai', text: q, confirmLine: null }];
+        renderTab('speak');
+      });
+    });
+  }
+}
+
+// ============================================================
+// Voice Recording Overlay
+// ============================================================
+function openVoiceOverlay() {
+  document.getElementById('voiceOverlay').classList.add('active');
+  resetVoiceUI();
+  // Don't auto-start — user must press the ▶ Start button
+}
+
+function resetVoiceUI() {
+  state.voiceState = 'ready';
+  state.voiceSeconds = 0;
+  clearInterval(state.voiceTimerInterval);
+  document.getElementById('voiceTimer').textContent = '00:00';
+  document.getElementById('voiceTimer').className = 'voice-timer';
+  document.getElementById('voiceWaves').className = 'voice-waves';
+  document.getElementById('voiceStateLabel').textContent = '点击开始录音';
+  // Show start button, hide recording buttons
+  document.getElementById('btnVoiceStart').style.display = '';
+  document.getElementById('btnVoiceRecord').style.display = 'none';
+  document.getElementById('btnVoicePause').style.display = 'none';
+  document.getElementById('voiceDraftArea').classList.remove('active');
+  document.getElementById('voiceDraftBox').textContent = '';
+}
+
+function startVoiceRecording() {
+  state.voiceState = 'recording';
+  state.voiceSeconds = 0;
+  document.getElementById('voiceTimer').textContent = '00:00';
+  document.getElementById('voiceTimer').className = 'voice-timer recording';
+  document.getElementById('voiceWaves').className = 'voice-waves recording';
+  document.getElementById('voiceStateLabel').textContent = '🔴 正在聆听';
+  // Swap: hide start, show record(pause)+pause+cancel
+  document.getElementById('btnVoiceStart').style.display = 'none';
+  document.getElementById('btnVoiceRecord').style.display = '';
+  document.getElementById('btnVoiceRecord').classList.remove('paused');
+  document.getElementById('btnVoicePause').style.display = '';
+  document.getElementById('voiceDraftArea').classList.remove('active');
+
+  clearInterval(state.voiceTimerInterval);
+  state.voiceTimerInterval = setInterval(() => {
+    state.voiceSeconds++;
+    const m = Math.floor(state.voiceSeconds / 60);
+    const s = state.voiceSeconds % 60;
+    document.getElementById('voiceTimer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+}
+
+function pauseVoiceRecording() {
+  state.voiceState = 'paused';
+  document.getElementById('voiceTimer').className = 'voice-timer paused';
+  document.getElementById('voiceWaves').className = 'voice-waves paused';
+  document.getElementById('voiceStateLabel').textContent = '⏸ 已暂停';
+  // Hide pause, show resume (record button as resume)
+  document.getElementById('btnVoicePause').style.display = 'none';
+  document.getElementById('btnVoiceRecord').textContent = '▶';
+  document.getElementById('btnVoiceRecord').classList.add('paused');
+  clearInterval(state.voiceTimerInterval);
+}
+
+function resumeVoiceRecording() {
+  state.voiceState = 'recording';
+  document.getElementById('voiceTimer').className = 'voice-timer recording';
+  document.getElementById('voiceWaves').className = 'voice-waves recording';
+  document.getElementById('voiceStateLabel').textContent = '🔴 正在聆听';
+  document.getElementById('btnVoiceRecord').textContent = '⏹';
+  document.getElementById('btnVoiceRecord').classList.remove('paused');
+  document.getElementById('btnVoicePause').style.display = '';
+  state.voiceTimerInterval = setInterval(() => {
+    state.voiceSeconds++;
+    const m = Math.floor(state.voiceSeconds / 60);
+    const s = state.voiceSeconds % 60;
+    document.getElementById('voiceTimer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+}
+
+function stopVoiceRecording() {
+  clearInterval(state.voiceTimerInterval);
+  state.voiceState = 'reviewing';
+  const samples = ['카페에 coffee 마시러 갔어요','이거 얼마예요?','한국어로 어떻게 말해요?','我想去咖啡馆'];
+  const picked = samples[Math.floor(Math.random()*samples.length)];
+  document.getElementById('voiceTimer').className = 'voice-timer';
+  document.getElementById('voiceWaves').className = 'voice-waves';
+  document.getElementById('voiceStateLabel').textContent = '📝 请确认转写结果';
+  document.getElementById('btnVoiceStart').style.display = 'none';
+  document.getElementById('btnVoiceRecord').style.display = 'none';
+  document.getElementById('btnVoicePause').style.display = 'none';
+  document.getElementById('voiceDraftBox').textContent = picked;
+  document.getElementById('voiceDraftArea').classList.add('active');
+}
+
+function cancelVoiceRecording() {
+  clearInterval(state.voiceTimerInterval);
+  document.getElementById('voiceOverlay').classList.remove('active');
+  resetVoiceUI();
+}
+
+function sendVoiceDraft() {
+  const text = document.getElementById('voiceDraftBox').textContent.trim();
+  if (!text) return;
+  document.getElementById('voiceOverlay').classList.remove('active');
+  resetVoiceUI();
+  // Send directly — no text input involved
+  sendTextAsMessage(text);
+}
+
+// Shared message-sending logic (used by voice draft)
+function sendTextAsMessage(text) {
+  state.chatHistory.push({ type: 'user', text, confirmLine: null });
+
+  const hasKorean = /[가-힣]/.test(text);
+  const hasChinese = /[一-鿿]/.test(text);
+  const hasEnglish = /[a-zA-Z]{2,}/.test(text);
+  let scenario = (!hasKorean && (hasChinese || hasEnglish)) || (hasChinese && hasKorean) ? 'A' : 'B';
+
+  setTimeout(() => {
+    let aiMsg;
+    if (scenario === 'A') {
+      aiMsg = { type: 'ai', confirmLine: '이거 맞죠?', text: getScenarioAResponse(text) };
+    } else {
+      aiMsg = { type: 'ai', text: getScenarioBResponse(text), confirmLine: null };
+    }
+    state.chatHistory.push(aiMsg);
+    renderTab('speak');
+    scrollToBottom();
+  }, 600 + Math.random() * 800);
+
+  renderTab('speak');
+  scrollToBottom();
+}
+
+// Bind voice overlay buttons once
+document.addEventListener('DOMContentLoaded', () => {
+  // Start button: only visible in "ready" state
+  document.getElementById('btnVoiceStart').addEventListener('click', startVoiceRecording);
+  // Record/Stop/Resume button: visible during recording/paused
+  document.getElementById('btnVoiceRecord').addEventListener('click', () => {
+    if (state.voiceState === 'recording') stopVoiceRecording();
+    else if (state.voiceState === 'paused') resumeVoiceRecording();
+  });
+  document.getElementById('btnVoicePause').addEventListener('click', () => {
+    if (state.voiceState === 'recording') pauseVoiceRecording();
+  });
+  document.getElementById('btnVoiceCancel').addEventListener('click', cancelVoiceRecording);
+  document.getElementById('btnReRecord').addEventListener('click', () => {
+    document.getElementById('voiceDraftArea').classList.remove('active');
+    // Go back to recording state (re-show buttons, restart timer)
+    startVoiceRecording();
+  });
+  document.getElementById('btnSendDraft').addEventListener('click', sendVoiceDraft);
+  init();
+});
+
+// ============================================================
+// TAB 2: Listening
+// ============================================================
+function renderListenPage() {
+  if (state.activeAudioFile) return renderListenDetail();
+  return renderListenList();
+}
+
+function renderListenList() {
+  let html = '';
+  // Upload zone
+  html += `<div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">📁</div>
+    <p>点击上传音频 (mp3/m4a) 或视频 (mp4/mov)</p>
+    <p style="font-size:10px;color:var(--text3);">支持韩语 + 英文外来词混合识别</p>
+  </div>`;
+  // Processing
+  html += `<div id="processingArea" style="display:none;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span>⏳</span><span style="font-size:13px;">AI 转写中...</span>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar" style="width:0%;"></div></div>
+    <p style="font-size:11px;color:var(--text3);" id="progressText">正在上传文件...</p>
+  </div>`;
+  // Audio file list
+  html += `<div style="font-weight:600;font-size:13px;margin:16px 0 8px;color:var(--text2);">📂 已保存的素材</div>`;
+  state.audioFiles.forEach(f => {
+    html += `<div class="audio-list-item" data-file-id="${f.id}">
+      <div class="file-icon">${f.icon}</div>
+      <div class="file-info">
+        <h4>${f.name}</h4>
+        <p>${f.duration} · ${f.date}</p>
+      </div>
+      <span class="file-arrow">›</span>
+    </div>`;
+  });
+  if (state.audioFiles.length === 0) {
+    html += `<p style="text-align:center;color:var(--text3);padding:24px;">还没有素材，点击上方上传</p>`;
+  }
+  return html;
+}
+
+function renderListenDetail() {
+  const file = state.audioFiles.find(f => f.id === state.activeAudioFile);
+  const transcript = state.transcripts[state.activeAudioFile] || [];
+  state.transcriptIdx = 0;
+  transcript.forEach((t,i) => { t.active = i === 0; });
+  state.playerProgress = 0;
+  stopPlayer();
+
+  let html = '';
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <button class="btn btn-outline btn-sm" id="btnBackListenList">← 返回列表</button>
+    <span style="font-size:12px;color:var(--text2);">${file?.name || ''}</span>
+  </div>`;
+
+  // Player
+  html += `<div class="player-card">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">📁 ${file?.name || ''}</div>
+    <div class="player-progress" id="playerProgressBar">
+      <div class="player-progress-fill" id="playerProgressFill" style="width:0%;"></div>
+    </div>
+    <div class="player-time"><span id="currentTime">00:00</span><span id="totalTime">${file?.duration || '00:00'}</span></div>
+    <div class="player-controls">
+      <button id="btnPrev">⏮</button>
+      <button class="btn-play" id="btnPlay">▶</button>
+      <button id="btnNext">⏭</button>
+    </div>
+    <div class="player-speed" id="speedControls">
+      <button data-speed="0.5">0.5×</button>
+      <button data-speed="0.75">0.75×</button>
+      <button data-speed="1" class="active">1×</button>
+      <button data-speed="1.5">1.5×</button>
+      <button data-speed="2">2×</button>
+    </div>
+  </div>`;
+
+  // Translation toggle
+  html += `<div class="transcript-toggle">
+    <input type="checkbox" id="toggleTranslation" ${state.showTranslation?'checked':''}>
+    <label for="toggleTranslation">显示译文（轻触展开）</label>
+  </div>`;
+
+  // Transcript
+  html += `<div class="transcript" id="transcriptArea">`;
+  transcript.forEach((item, idx) => {
+    html += `<div class="transcript-item ${item.active?'active':''}" data-tidx="${idx}">
+      <span class="time">${item.time}</span>${makeWordsClickable(item.ko)}
+      <div class="translation ${state.showTranslation?'show':''}">${item.zh}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function bindListenEvents() {
+  if (state.activeAudioFile) {
+    bindListenDetailEvents();
+  } else {
+    bindListenListEvents();
+  }
+}
+
+function bindListenListEvents() {
+  // Upload
+  document.getElementById('uploadZone')?.addEventListener('click', simulateUpload);
+
+  // File list items
+  document.querySelectorAll('.audio-list-item').forEach(item => {
+    item.addEventListener('click', function() {
+      state.activeAudioFile = parseInt(this.dataset.fileId);
+      stopPlayer();
+      state.playerProgress = 0;
+      state.transcriptIdx = 0;
+      renderTab('listen');
+    });
+  });
+}
+
+function bindListenDetailEvents() {
+  document.getElementById('btnBackListenList')?.addEventListener('click', () => {
+    stopPlayer();
+    state.activeAudioFile = null;
+    renderTab('listen');
+  });
+
+  // Transcript items
+  document.querySelectorAll('.transcript-item').forEach(item => {
+    item.addEventListener('click', function() {
+      const idx = parseInt(this.dataset.tidx);
+      const transcript = state.transcripts[state.activeAudioFile] || [];
+      state.transcriptIdx = idx;
+      transcript.forEach(t => t.active = false);
+      transcript[idx].active = true;
+      updateTranscriptHighlight();
+      const pct = transcript.length > 1 ? (idx / (transcript.length - 1)) * 100 : 0;
+      document.getElementById('playerProgressFill').style.width = pct + '%';
+      document.getElementById('currentTime').textContent = transcript[idx].time;
+    });
+  });
+
+  // Translation toggle
+  document.getElementById('toggleTranslation')?.addEventListener('change', function() {
+    state.showTranslation = this.checked;
+    document.querySelectorAll('.translation').forEach(el => el.classList.toggle('show', state.showTranslation));
+  });
+
+  // Player
+  document.getElementById('btnPlay')?.addEventListener('click', togglePlay);
+  document.getElementById('btnPrev')?.addEventListener('click', prevTranscript);
+  document.getElementById('btnNext')?.addEventListener('click', nextTranscript);
+
+  document.querySelectorAll('#speedControls button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#speedControls button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      state.playerSpeed = parseFloat(this.dataset.speed);
+    });
+  });
+
+  // Word clicks
+  document.querySelectorAll('#transcriptArea .word').forEach(w => {
+    w.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openWordPopup(this.textContent);
+    });
+  });
+}
+
+function simulateUpload() {
+  document.getElementById('uploadZone').style.display = 'none';
+  const pa = document.getElementById('processingArea');
+  pa.style.display = 'block';
+  const bar = document.getElementById('progressBar');
+  const text = document.getElementById('progressText');
+  let pct = 0;
+  const steps = ['正在上传文件...', 'AI 识别语音中...', '生成韩文文本...', '时间轴对齐...', '完成！'];
+  const interval = setInterval(() => {
+    pct += Math.random() * 25 + 5;
+    if (pct >= 100) {
+      pct = 100;
+      clearInterval(interval);
+      bar.style.width = '100%';
+      text.textContent = '✅ 转写完成！';
+      setTimeout(() => {
+        // Add to list
+        const newId = Math.max(...state.audioFiles.map(f=>f.id), 0) + 1;
+        state.audioFiles.unshift({
+          id: newId, name: `새로운 녹음_${newId}.mp3`, duration:'01:23', date: new Date().toISOString().slice(0,10), icon:'🎵'
+        });
+        state.transcripts[newId] = [
+          { time:'00:05', ko:'안녕하세요, 새로 업로드된 파일입니다.', zh:'你好，这是新上传的文件。' },
+          { time:'00:14', ko:'이 문장은 AI 가 자동으로 인식한 텍스트입니다.', zh:'这个句子是 AI 自动识别的文本。' },
+        ];
+        pa.style.display = 'none';
+        document.getElementById('uploadZone').style.display = '';
+        showToast('✅ 转写完成！已添加到列表');
+        renderTab('listen');
+      }, 600);
+    } else {
+      bar.style.width = pct + '%';
+      text.textContent = steps[Math.min(Math.floor(pct/25), steps.length-1)] + ` (${Math.round(pct)}%)`;
+    }
+  }, 400);
+}
+
+// --- Player controls ---
+function stopPlayer() {
+  state.isPlaying = false;
+  clearInterval(state.playerInterval);
+}
+function togglePlay() {
+  state.isPlaying = !state.isPlaying;
+  const btn = document.getElementById('btnPlay');
+  if (!btn) return;
+  btn.textContent = state.isPlaying ? '⏸' : '▶';
+  const transcript = state.transcripts[state.activeAudioFile] || [];
+
+  if (state.isPlaying) {
+    state.playerInterval = setInterval(() => {
+      state.playerProgress += 0.5;
+      if (state.playerProgress >= 100) {
+        state.playerProgress = 0;
+        state.isPlaying = false;
+        btn.textContent = '▶';
+        clearInterval(state.playerInterval);
+      }
+      document.getElementById('playerProgressFill').style.width = state.playerProgress + '%';
+      const segPct = transcript.length > 0 ? 100 / transcript.length : 100;
+      const idx = Math.min(Math.floor(state.playerProgress / segPct), transcript.length - 1);
+      if (idx !== state.transcriptIdx && transcript.length > 0) {
+        state.transcriptIdx = idx;
+        transcript.forEach(t => t.active = false);
+        transcript[idx].active = true;
+        updateTranscriptHighlight();
+        document.getElementById('currentTime').textContent = transcript[idx].time;
+      }
+      // Update time
+      const file = state.audioFiles.find(f => f.id === state.activeAudioFile);
+      const durSec = file ? parseDuration(file.duration) : 48;
+      const cur = Math.round((state.playerProgress / 100) * durSec);
+      document.getElementById('currentTime').textContent = fmtTime(cur);
+    }, 100);
+  } else {
+    clearInterval(state.playerInterval);
+  }
+}
+function prevTranscript() {
+  const transcript = state.transcripts[state.activeAudioFile] || [];
+  if (state.transcriptIdx > 0) {
+    state.transcriptIdx--;
+    transcript.forEach(t => t.active = false);
+    transcript[state.transcriptIdx].active = true;
+    updateTranscriptHighlight();
+    document.getElementById('currentTime').textContent = transcript[state.transcriptIdx].time;
+    state.playerProgress = transcript.length > 1 ? (state.transcriptIdx/(transcript.length-1))*100 : 0;
+    document.getElementById('playerProgressFill').style.width = state.playerProgress + '%';
+  }
+}
+function nextTranscript() {
+  const transcript = state.transcripts[state.activeAudioFile] || [];
+  if (state.transcriptIdx < transcript.length - 1) {
+    state.transcriptIdx++;
+    transcript.forEach(t => t.active = false);
+    transcript[state.transcriptIdx].active = true;
+    updateTranscriptHighlight();
+    document.getElementById('currentTime').textContent = transcript[state.transcriptIdx].time;
+    state.playerProgress = transcript.length>1 ? (state.transcriptIdx/(transcript.length-1))*100 : 100;
+    document.getElementById('playerProgressFill').style.width = state.playerProgress + '%';
+  }
+}
+function updateTranscriptHighlight() {
+  const transcript = state.transcripts[state.activeAudioFile] || [];
+  document.querySelectorAll('.transcript-item').forEach((el, i) => {
+    el.classList.toggle('active', transcript[i]?.active);
+  });
+}
+function parseDuration(d) {
+  const parts = d.split(':');
+  return parseInt(parts[0])*60 + parseInt(parts[1]);
+}
+function fmtTime(s) {
+  const m = Math.floor(s/60);
+  const sec = s%60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+// ============================================================
+// TAB 3: Learning Library (with section grouping)
+// ============================================================
+function renderLibraryPage() {
+  let html = '';
+  html += `<div class="lib-tabs">
+    <button class="lib-tab ${state.currentLibTab==='words'?'active':''}" data-lib="words">📝 生词本 (${state.words.length})</button>
+    <button class="lib-tab ${state.currentLibTab==='sentences'?'active':''}" data-lib="sentences">⭐ 收藏句库 (${state.sentences.length})</button>
+  </div>`;
+  html += `<div class="lib-toolbar">
+    <input type="text" id="libSearch" placeholder="🔍 搜索韩文或中文关键词...">
+    <select id="libSort">
+      <option value="newest" ${state.currentSort==='newest'?'selected':''}>最新</option>
+      <option value="az" ${state.currentSort==='az'?'selected':''}>가나다 顺</option>
+      <option value="mastered" ${state.currentSort==='mastered'?'selected':''}>掌握度</option>
+    </select>
+  </div>`;
+  html += `<div class="filter-row" id="filterRow">
+    <button class="filter-chip ${state.currentFilter==='all'?'active':''}" data-filter="all">全部</button>
+    <button class="filter-chip ${state.currentFilter==='常用'?'active':''}" data-filter="常用">常用</button>
+    <button class="filter-chip ${state.currentFilter==='外来词'?'active':''}" data-filter="外来词">🔤 外来词</button>
+    <button class="filter-chip ${state.currentFilter==='已掌握'?'active':''}" data-filter="已掌握">✅ 已掌握</button>
+    <button class="filter-chip ${state.currentFilter==='待复习'?'active':''}" data-filter="待复习">📌 待复习</button>
+  </div>`;
+  html += `<div id="libContent"></div>`;
+  return html;
+}
+
+function updateLibContent() {
+  const container = document.getElementById('libContent');
+  if (!container) return;
+  if (state.currentLibTab === 'words') {
+    container.innerHTML = renderGroupedWords();
+    bindWordCardClicks();
+  } else {
+    container.innerHTML = renderGroupedSentences();
+  }
+}
+
+function renderGroupedWords() {
+  let words = applyWordFilters();
+  if (words.length === 0) return '<p style="text-align:center;color:var(--text3);padding:40px;">暂无单词，去口语或精听模块收藏吧 ✨</p>';
+
+  // Sort
+  if (state.currentSort === 'az') words.sort((a,b) => a.ko.localeCompare(b.ko, 'ko'));
+  else if (state.currentSort === 'mastered') words.sort((a,b) => (a.mastered?1:0) - (b.mastered?1:0));
+
+  // Group by section
+  const groups = { speak: [], listen: [], other: [] };
+  words.forEach(w => {
+    if (groups[w.section]) groups[w.section].push(w);
+    else groups.other.push(w);
+  });
+
+  const labels = { speak: '💬 口语对话收藏', listen: '🎧 精听跟读收藏', other: '📂 其他来源' };
+  let html = '';
+  for (const [key, list] of Object.entries(groups)) {
+    if (list.length === 0) continue;
+    const collapsed = state.wordSectionsCollapsed[key] || false;
+    html += `<div class="lib-section">
+      <div class="lib-section-header ${collapsed?'collapsed':''}" data-section="${key}">
+        <span>${labels[key]} <span class="count">${list.length} 词</span></span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="lib-section-body ${collapsed?'collapsed':''}">`;
+    list.forEach(w => { html += renderWordCard(w); });
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+function renderGroupedSentences() {
+  let sents = applySentenceFilters();
+  if (sents.length === 0) return '<p style="text-align:center;color:var(--text3);padding:40px;">暂无收藏句子</p>';
+
+  const groups = { speak: [], listen: [], other: [] };
+  sents.forEach(s => {
+    if (groups[s.section]) groups[s.section].push(s);
+    else groups.other.push(s);
+  });
+
+  const labels = { speak: '💬 口语对话收藏', listen: '🎧 精听跟读收藏', other: '📂 其他来源' };
+  let html = '';
+  for (const [key, list] of Object.entries(groups)) {
+    if (list.length === 0) continue;
+    const collapsed = state.sentenceSectionsCollapsed[key] || false;
+    html += `<div class="lib-section">
+      <div class="lib-section-header ${collapsed?'collapsed':''}" data-section="${key}">
+        <span>${labels[key]} <span class="count">${list.length} 句</span></span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="lib-section-body ${collapsed?'collapsed':''}">`;
+    list.forEach(s => { html += renderSentenceCard(s); });
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+function applyWordFilters() {
+  let w = [...state.words];
+  if (state.currentFilter === '外来词') w = w.filter(x => x.isLoanword);
+  else if (state.currentFilter === '常用') w = w.filter(x => !x.isLoanword);
+  else if (state.currentFilter === '已掌握') w = w.filter(x => x.mastered);
+  else if (state.currentFilter === '待复习') w = w.filter(x => !x.mastered);
+  const q = (document.getElementById('libSearch')?.value || '').toLowerCase().trim();
+  if (q) w = w.filter(x => x.ko.includes(q) || x.meaning.includes(q) || x.base.includes(q));
+  return w;
+}
+function applySentenceFilters() {
+  let s = [...state.sentences];
+  const q = (document.getElementById('libSearch')?.value || '').toLowerCase().trim();
+  if (q) s = s.filter(x => x.ko.includes(q) || x.zh.includes(q));
+  if (state.currentFilter === '已掌握') s = [];
+  return s;
+}
+
+function renderWordCard(w) {
+  return `<div class="word-card" data-word-id="${w.id}">
+    <div class="word-front">
+      <div class="ko-word">${w.ko}</div>
+      <div class="roma">${state.settings.roma ? w.roma : '点击翻转查看详情'}</div>
+      <div class="pos-tag"><span class="tag">${w.pos}</span>${w.isLoanword?' <span class="tag green">🔤 外来词</span>':''}</div>
+    </div>
+    <div class="word-back">
+      <div style="font-size:16px;">${w.ko} <span style="font-size:11px;color:var(--accent);">(${w.base})</span></div>
+      <div class="roma">${w.roma}</div>
+      <div class="meaning">${w.meaning}</div>
+      <div class="example">${w.example}</div>
+      <div class="source">📌 ${w.source}</div>
+    </div>
+    <span class="mastered-btn" onclick="event.stopPropagation();toggleMastered(${w.id})" title="标记已掌握">${w.mastered?'✅':'☑️'}</span>
+  </div>`;
+}
+
+function renderSentenceCard(s) {
+  return `<div class="sentence-card" onclick="showSentenceDetail('${s.ko.replace(/'/g,"\\'")}','${s.zh.replace(/'/g,"\\'")}','${s.source.replace(/'/g,"\\'")}')">
+    <div class="ko-sentence">${s.ko}</div>
+    <div class="sentence-meta">📌 ${s.source} · 🔊 点击播放发音</div>
+  </div>`;
+}
+
+function bindLibraryEvents() {
+  updateLibContent();
+
+  document.querySelectorAll('.lib-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      state.currentLibTab = this.dataset.lib;
+      state.currentFilter = 'all';
+      renderTab('library');
+    });
+  });
+
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      state.currentFilter = this.dataset.filter;
+      renderTab('library');
+    });
+  });
+
+  document.getElementById('libSearch')?.addEventListener('input', () => { updateLibContent(); });
+  document.getElementById('libSort')?.addEventListener('change', function() {
+    state.currentSort = this.value;
+    updateLibContent();
+  });
+
+  // Section collapse
+  document.querySelectorAll('.lib-section-header').forEach(header => {
+    header.addEventListener('click', function() {
+      const section = this.dataset.section;
+      const body = this.nextElementSibling;
+      const collapsed = !body.classList.contains('collapsed');
+      body.classList.toggle('collapsed', collapsed);
+      this.classList.toggle('collapsed', collapsed);
+      if (state.currentLibTab === 'words') state.wordSectionsCollapsed[section] = collapsed;
+      else state.sentenceSectionsCollapsed[section] = collapsed;
+    });
+  });
+
+  bindWordCardClicks();
+}
+
+function bindWordCardClicks() {
+  document.querySelectorAll('.word-card').forEach(card => {
+    card.addEventListener('click', function() { this.classList.toggle('flipped'); });
+  });
+}
+
+function toggleMastered(id) {
+  const word = state.words.find(w => w.id === id);
+  if (word) {
+    word.mastered = !word.mastered;
+    showToast(word.mastered ? '✅ 已标记为掌握' : '📌 已标记为待复习');
+    updateLibContent();
+  }
+}
+
+// ============================================================
+// TAB 4: Profile
+// ============================================================
+function renderProfilePage() {
+  let html = '';
+  html += `<div class="profile-header">
+    <div class="profile-avatar">👩‍🎓</div>
+    <div class="profile-info">
+      <h3>韩语学习者</h3>
+      <span class="level">B1 · 中级</span><br>
+      <span class="goal">🎯 目标：日常交流</span>
+    </div>
+  </div>`;
+
+  // Member card (display only, no functional implementation)
+  html += `<div class="member-card" style="opacity:.8;">
+    <div class="member-info">
+      <h4>⭐ 免费用户</h4>
+      <p>升级会员解锁更多功能（开发中）</p>
+    </div>
+    <button class="btn btn-outline btn-sm" disabled style="opacity:.5;">开发中</button>
+  </div>`;
+
+  // Calendar
+  html += `<div style="font-weight:600;font-size:14px;margin-bottom:8px;">📅 本周打卡</div>`;
+  html += `<div class="calendar">`;
+  ['一','二','三','四','五','六','日'].forEach(d => html += `<div class="day-label">${d}</div>`);
+  const today = new Date().getDay();
+  const todayIdx = today === 0 ? 6 : today - 1;
+  state.checkinDays.forEach((checked, i) => {
+    const cls = []; if (checked) cls.push('checked'); if (i===todayIdx) cls.push('today');
+    html += `<div class="day-cell ${cls.join(' ')}">${checked?'🔥':i+1}</div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="stats-row">
+    <div class="stat-box"><div class="stat-value" style="color:var(--orange);">4</div><div class="stat-label">连续打卡</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--accent);">12</div><div class="stat-label">最长连续</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--green);">47</div><div class="stat-label">口语轮次</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--pink);">${state.audioFiles.length}</div><div class="stat-label">精听素材</div></div>
+  </div>`;
+
+  const records = [
+    { icon:'💬', title:'日常生活 · AI 口语对话', time:'今天 14:30' },
+    { icon:'🎧', title:'coffee_menu · 音视频精听', time:'今天 10:15' },
+    { icon:'💬', title:'TOPIK 口语备考 · AI 对话', time:'昨天 20:00' },
+    { icon:'📝', title:'单词复习 · 6 个单词', time:'昨天 18:30' },
+  ];
+  html += `<div style="font-weight:600;font-size:14px;margin-bottom:8px;">📋 学习记录</div>`;
+  records.forEach(r => {
+    html += `<div class="history-item">
+      <span class="history-icon">${r.icon}</span>
+      <div class="history-info"><h4>${r.title}</h4><p>${r.time}</p></div>
+      <span style="color:var(--text3);">›</span>
+    </div>`;
+  });
+
+  html += `<div class="settings-list">
+    <div style="font-weight:600;font-size:14px;margin-bottom:4px;">⚙️ 系统设置</div>
+    <div class="setting-item"><span>罗马音默认显示</span><div class="toggle ${state.settings.roma?'on':''}" id="toggleRoma" onclick="toggleSetting('roma')"></div></div>
+    <div class="setting-item"><span>音频播放语速</span><span style="color:var(--text2);">${state.settings.speed}×</span></div>
+    <div class="setting-item"><span>缓存清理</span><span style="color:var(--text2);">128 MB ›</span></div>
+    <div class="setting-item"><span>离线下载</span><span style="color:var(--text2);">管理 ›</span></div>
+    <div class="setting-item"><span>意见反馈</span><span style="color:var(--text2);">›</span></div>
+  </div>`;
+  return html;
+}
+
+function bindProfileEvents() {
+  document.querySelectorAll('.day-cell').forEach(cell => {
+    cell.addEventListener('click', function() {
+      if (this.classList.contains('checked')) return;
+      this.classList.add('checked');
+      this.textContent = '🔥';
+      const idx = Array.from(this.parentElement.children).filter(c=>c.classList.contains('day-cell')).indexOf(this);
+      state.checkinDays[idx] = true;
+      showToast('✅ 打卡成功！');
+    });
+  });
+  document.querySelectorAll('.history-item').forEach(item => {
+    item.addEventListener('click', () => showToast('📖 快照模式（只读）- 仅供回顾'));
+  });
+}
+function toggleSetting(key) {
+  if (key === 'roma') {
+    state.settings.roma = !state.settings.roma;
+    document.getElementById('toggleRoma')?.classList.toggle('on', state.settings.roma);
+    showToast(state.settings.roma ? '罗马音已开启' : '罗马音已关闭');
+  }
+}
+
+// ============================================================
+// Popups & Modals
+// ============================================================
+function openWordPopup(word) {
+  const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
+  if (!clean) return;
+  const found = state.words.find(w => w.ko === clean || w.base === clean);
+  const data = found || { ko:clean, base:clean, roma:clean+' (罗马音)', pos:'명사 (名词)', meaning:clean+' 的中文释义', example:'이것은 '+clean+' 입니다.', source:'点击收藏入库' };
+  const html = `<div class="handle"></div>
+    <h3>🔍 单词详情</h3><div class="sub">点击单词查看释义</div>
+    <div class="ko-large">${data.ko} <span style="font-size:12px;color:var(--accent);">(${data.base})</span></div>
+    <div style="font-size:13px;color:var(--text2);margin:4px 0;">🔊 ${data.roma}</div>
+    <div style="margin:8px 0;"><span class="tag">${data.pos}</span>${data.isLoanword?' <span class="tag green">🔤 外来词</span>':''}</div>
+    <div style="font-size:15px;margin:8px 0;">💡 ${data.meaning}</div>
+    <div style="font-size:13px;color:var(--text2);margin:8px 0;">📝 ${data.example}</div>
+    <div style="font-size:11px;color:var(--text3);margin:8px 0;">📌 来源：${data.source}</div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveWord('${clean}')">⭐ 收藏到学习库</button>
+      <button class="btn btn-outline btn-sm" onclick="playTTS('${clean}')">🔊 发音</button>
+    </div>`;
+  showWordModal(html);
+}
+
+function openSentenceModal(e, idx, sender) {
+  const msg = state.chatHistory[idx];
+  if (!msg) return;
+  const text = msg.text;
+  const demoZh = /[가-힣]/.test(text)
+    ? '这是地道韩语表达的翻译，帮助您理解句意。在日常对话中，这句话可以用于多种场景。同义替换：비슷한 표현으로 바꿔 말할 수도 있습니다。'
+    : '您想知道这句话用地道韩语怎么说。AI 已用纯韩语回复。';
+  const html = `<div class="handle"></div>
+    <h3>📖 整句 AI 讲解</h3><div class="sub">点击句子查看翻译与解析（对话列表不展示翻译）</div>
+    <div class="ko-large" style="font-size:16px;">${text}</div>
+    <div style="margin:12px 0;padding:12px;background:rgba(78,205,196,.08);border-radius:8px;">
+      <div style="font-size:12px;color:var(--green);margin-bottom:4px;">🀄 中文翻译</div>
+      <div style="font-size:14px;">${demoZh}</div>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin:8px 0;"><strong>📝 句式使用场景：</strong>日常对话、表达意见、请求信息</div>
+    <div style="font-size:13px;color:var(--text2);margin:8px 0;"><strong>🔄 同义替换表达：</strong>비슷한 의미의 다른 표현들...</div>
+    <div style="font-size:13px;color:var(--text2);margin:8px 0;"><strong>⚠️ 口语注意事项：</strong>注意敬语使用场景，非正式场合可用半语。</div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveSentence('${text.replace(/'/g,"\\'")}')">⭐ 收藏句子</button>
+      <button class="btn btn-outline btn-sm" onclick="playTTS('${text.replace(/'/g,"\\'")}')">🔊 整句朗读</button>
+    </div>`;
+  showSentenceModal(html);
+}
+
+function showWordModal(html) { document.getElementById('wordModalContent').innerHTML=html; document.getElementById('wordModal').style.display='flex'; }
+function showSentenceModal(html) { document.getElementById('sentenceModalContent').innerHTML=html; document.getElementById('sentenceModal').style.display='flex'; }
+function closeModals() { document.getElementById('wordModal').style.display='none'; document.getElementById('sentenceModal').style.display='none'; }
+
+function saveWord(word) {
+  const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
+  if (state.words.find(w=>w.ko===clean)) { showToast('📚 该单词已在学习库中'); closeModals(); return; }
+  state.words.push({
+    id: state.words.length+1, ko:clean, base:clean, roma:clean+' (音)',
+    pos:'명사 (名词)', meaning:clean+' 的中文释义', example:'이것은 '+clean+' 입니다.',
+    source: state.activeTab==='speak'?'AI 口语对话':'音视频精听', tags:[], mastered:false,
+    isLoanword: /[a-zA-Z]/.test(clean), section: state.activeTab==='listen'?'listen':'speak'
+  });
+  showToast('⭐ 已收藏到学习库');
+  closeModals();
+}
+function saveSentence(text) {
+  if (state.sentences.find(s=>s.ko===text)) { showToast('📚 该句子已在收藏句库中'); closeModals(); return; }
+  state.sentences.push({ id:state.sentences.length+1, ko:text, source:'AI 口语对话', zh:'（点击查看中文翻译）', section:'speak' });
+  showToast('⭐ 句子已收藏');
+  closeModals();
+}
+function playTTS(text) {
+  showToast('🔊 正在朗读...');
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang='ko-KR'; u.rate=state.settings.speed;
+    window.speechSynthesis.speak(u);
+  }
+}
+function showSentenceDetail(ko,zh,source) {
+  showWordModal(`<div class="handle"></div><h3>📖 收藏句子详情</h3>
+    <div class="ko-large" style="font-size:16px;">${ko}</div>
+    <div style="margin:12px 0;padding:12px;background:rgba(78,205,196,.08);border-radius:8px;">
+      <div style="font-size:12px;color:var(--green);margin-bottom:4px;">🀄 中文翻译</div><div style="font-size:14px;">${zh}</div></div>
+    <div style="font-size:12px;color:var(--text3);">📌 来源：${source}</div>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="playTTS('${ko.replace(/'/g,"\\'")}')">🔊 播放发音</button>`);
+}
+
+// ============================================================
+// First-time guide
+// ============================================================
+function showFirstGuide() { document.getElementById('firstGuide').classList.add('active'); }
+function closeFirstGuide() { document.getElementById('firstGuide').classList.remove('active'); }
+
+// ============================================================
+// Toast
+// ============================================================
+function showToast(msg) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg; c.appendChild(t);
+  setTimeout(()=>t.remove(),2000);
+}
+
+</script>
+</body>
+</html>
