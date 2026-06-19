@@ -36,11 +36,41 @@ export async function azureSTTWithTimestamps(fileUri: string): Promise<AzureSTTS
   const path = decodeURIComponent(fileUri.replace(/^file:\/\//, ''));
   const b64 = await readFile(path, 'base64');
   const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
+  let bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
+  // ── Strip ID3v2 header if present ──
+  // 49 44 33 = "ID3".  Don't trust the sync-safe size header (some encoders
+  // including Qiniu avthumb write more frame data than declared).  Instead
+  // scan forward for the first MPEG audio frame sync word (FF FB / FF F3 / etc).
+  let offset = 0;
+  if (bytes.length > 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    offset = 10; // skip 10-byte ID3 header
+    // Scan for MPEG sync: FF followed by top 3 bits set (FF E0-FF FF)
+    while (offset < bytes.length - 1) {
+      if (bytes[offset] === 0xFF && (bytes[offset + 1] & 0xE0) === 0xE0) break;
+      // Also try ID3v2 frame header skip (4-char ID + 4-byte size)
+      if (offset + 10 < bytes.length && bytes[offset] >= 0x41 && bytes[offset] <= 0x5A) {
+        // Looks like an ID3v2 frame ID (A-Z)
+        const frameSize = (bytes[offset + 4] << 24) | (bytes[offset + 5] << 16) | (bytes[offset + 6] << 8) | bytes[offset + 7];
+        if (frameSize > 0 && frameSize < bytes.length - offset) {
+          offset += 10 + frameSize;
+          continue;
+        }
+      }
+      offset++;
+    }
+    if (offset >= bytes.length - 1) offset = 10;
+    console.log('[Azure STT] ID3v2 stripped, first audio frame at byte', offset);
+  }
+  bytes = bytes.slice(offset);
+
   const contentType = getContentType(fileUri);
-  console.log('[Azure STT] Read', bytes.length, 'bytes, type:', contentType, 'region:', region);
+
+  // Print first 16 bytes as hex to verify file format
+  const head = Array.from(bytes.slice(0, 16)).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+  console.log('[Azure STT] Read', bytes.length, 'bytes (after ID3 strip), type:', contentType, 'region:', region);
+  console.log('[Azure STT] Head bytes:', head);
 
   if (bytes.length < 200) {
     throw new Error(`音频文件过小 (${bytes.length} B)`);
