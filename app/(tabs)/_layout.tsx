@@ -1,5 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { MessageCircle, Headphones, BookOpen, User } from 'lucide-react-native';
 import SpeakScreen from './speak';
 import ListenScreen from './listen';
 import LibraryScreen from './library';
@@ -23,10 +23,10 @@ export default function TabLayout() {
       tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e4e1f0', borderTopWidth: 1, paddingTop: 4, paddingBottom: 20, height: 72 },
       tabBarLabelStyle: { fontSize: 10, fontWeight: '500' as const },
     }}>
-      <Tab.Screen name="Speak" component={SpeakScreen} options={{ title: '口语', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💬</Text> }} />
-      <Tab.Screen name="Listen" component={ListenScreen} options={{ title: '精听', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🎧</Text> }} />
-      <Tab.Screen name="Library" component={LibraryScreen} options={{ title: '学习库', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📚</Text> }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: '我的', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👤</Text> }} />
+      <Tab.Screen name="Speak" component={SpeakScreen} options={{ title: '口语', tabBarIcon: ({ color, size }) => <MessageCircle size={size ?? 22} color={color} /> }} />
+      <Tab.Screen name="Listen" component={ListenScreen} options={{ title: '精听', tabBarIcon: ({ color, size }) => <Headphones size={size ?? 22} color={color} /> }} />
+      <Tab.Screen name="Library" component={LibraryScreen} options={{ title: '学习库', tabBarIcon: ({ color, size }) => <BookOpen size={size ?? 22} color={color} /> }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: '我的', tabBarIcon: ({ color, size }) => <User size={size ?? 22} color={color} /> }} />
     </Tab.Navigator>
   );
 }

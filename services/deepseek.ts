@@ -47,6 +47,65 @@ export async function deepSeekChat(history: DeepSeekMessage[]): Promise<string> 
   return data.choices[0].message.content as string;
 }
 
+export async function deepSeekTranslate(text: string): Promise<string> {
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: '你是韩译中翻译器。把用户输入的韩语翻译成自然的简体中文,只输出译文本身,不要加任何解释或引号。' },
+        { role: 'user', content: text },
+      ],
+      temperature: 0.3,
+      max_tokens: 200,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek translate error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return (data.choices[0].message.content as string).trim();
+}
+
+const ROMANIZE_PROMPT = `You are a Korean romanization expert. Convert the given Korean text into Revised Romanization of Korean (국어의 로마자 표기법).
+Rules:
+- Use Revised Romanization (not McCune-Reischauer)
+- Keep English loanwords in their original Latin form (e.g., "coffee" stays "coffee", "special" stays "special")
+- Separate words with spaces matching the Korean spacing
+- Reply ONLY with the romanized text, no other text or explanation.`;
+
+export async function deepSeekRomanize(text: string): Promise<string> {
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: ROMANIZE_PROMPT },
+        { role: 'user', content: text },
+      ],
+      temperature: 0.1,
+      max_tokens: 500,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek romanize error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return (data.choices[0].message.content as string).trim();
+}
+
 export async function deepSeekWordLookup(word: string): Promise<{
   pos: string;
   meanings: string[];

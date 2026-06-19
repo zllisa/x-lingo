@@ -1,7 +1,12 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useRef, useEffect, useState } from 'react';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import { Volume2 } from 'lucide-react-native';
 import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useProfileStore } from '../../stores/useProfileStore';
 import { useWordLookup } from '../../hooks/useWordLookup';
+import { azureTTS } from '../../services/azureTTS';
 import { Word } from '../../types';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
@@ -15,6 +20,48 @@ export default function WordDetailModal() {
   const source = route.params?.source ?? '';
   const { words, addWord } = useLibraryStore();
   const { data, isLoading } = useWordLookup(word || '', true);
+
+  const player = useRef(new AudioRecorderPlayer());
+  const [playing, setPlaying] = useState(false);
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (playing) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.25, duration: 350, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 350, useNativeDriver: true }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    Animated.timing(pulse, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+  }, [playing]);
+
+  useEffect(() => () => { try { player.current.stopPlayer(); } catch {} }, []);
+
+  const playPronunciation = async () => {
+    if (!word || playing) return;
+    try {
+      setPlaying(true);
+      const speed = useProfileStore.getState().settings?.playbackSpeed || 1;
+      const path = await azureTTS(word, speed);
+      const uri = path.startsWith('file://') ? path : 'file://' + path;
+      try { await player.current.stopPlayer(); } catch {}
+      try { player.current.removePlayBackListener(); } catch {}
+      player.current.addPlayBackListener((e) => {
+        if (e.currentPosition >= e.duration) {
+          setPlaying(false);
+          try { player.current.removePlayBackListener(); } catch {}
+        }
+      });
+      await player.current.startPlayer(uri);
+    } catch (e) {
+      setPlaying(false);
+      console.warn('pronunciation error:', e);
+    }
+  };
 
   const existing = words.find(w => w.ko === word);
   const alreadySaved = !!existing;
@@ -43,7 +90,8 @@ export default function WordDetailModal() {
 
   return (
     <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => navigation.goBack()}>
-      <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
+      {/* Absorb taps on the card itself so only backdrop taps dismiss the sheet */}
+      <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
         <Text style={[S.textBase, S.bold, S.text, S.mb1]}>🔍 单词详情</Text>
         <Text style={[S.textXs, S.text3, S.mb3]}>点击单词查看释义</Text>
@@ -73,11 +121,14 @@ export default function WordDetailModal() {
           <TouchableOpacity style={[S.flex1, S.py3, S.roundedFull, alreadySaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter]} onPress={handleSave}>
             <Text style={[S.textSm, S.textWhite, S.semibold]}>{alreadySaved ? '✅ 已在学习库' : '⭐ 收藏到学习库'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.itemsCenter]} onPress={() => navigation.goBack()}>
-            <Text style={[S.textSm, S.text]}>🔊 发音</Text>
+          <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.flexRow, S.gap1, S.itemsCenter]} onPress={playPronunciation} disabled={playing} activeOpacity={0.6}>
+            <Animated.View style={{ transform: [{ scale: pulse }] }}>
+              <Volume2 size={16} color={playing ? C.accent : C.text} />
+            </Animated.View>
+            <Text style={[S.textSm, S.text]}>{playing ? '播放中...' : '发音'}</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 }

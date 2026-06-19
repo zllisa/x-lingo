@@ -14,8 +14,10 @@ interface AuthStore {
   restoreSession: () => Promise<void>;
 }
 
+type AuthPersist = Pick<AuthStore, 'userId' | 'email' | 'isLoggedIn'>;
+
 export const useAuthStore = create<AuthStore>()(
-  persist(
+  persist<AuthStore, [], [], AuthPersist>(
     (set, get) => ({
       userId: null,
       email: null,

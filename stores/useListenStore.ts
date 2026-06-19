@@ -14,6 +14,7 @@ interface ListenStore {
   transcriptIdx: number;
 
   addFile: (f: AudioFile) => void;
+  removeFile: (id: string) => void;
   setActiveFile: (id: string | null) => void;
   setPlaying: (p: boolean) => void;
   setSpeed: (s: number) => void;
@@ -38,6 +39,15 @@ export const useListenStore = create<ListenStore>()(
       transcriptIdx: 0,
 
       addFile: (f) => set((s) => ({ audioFiles: [f, ...s.audioFiles] })),
+      removeFile: (id) =>
+        set((s) => {
+          const { [id]: _, ...rest } = s.transcripts;
+          return {
+            audioFiles: s.audioFiles.filter((f) => f.id !== id),
+            transcripts: rest,
+            activeFileId: s.activeFileId === id ? null : s.activeFileId,
+          };
+        }),
       setActiveFile: (id) => set({ activeFileId: id, progress: 0, transcriptIdx: 0, isPlaying: false }),
       setPlaying: (isPlaying) => set({ isPlaying }),
       setSpeed: (playerSpeed) => set({ playerSpeed }),

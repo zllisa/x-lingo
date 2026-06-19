@@ -1,4 +1,4 @@
-import RNFS from '@dr.pogodin/react-native-fs';
+import { CachesDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
 import { AZURE_TTS_KEY, AZURE_TTS_REGION } from '../constants/api';
 const ENDPOINT = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
@@ -28,8 +28,11 @@ export async function azureTTS(text: string, speed: number = 1): Promise<string>
 
   // Write audio to temp file
   const arrayBuffer = await response.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-  const uri = RNFS.CachesDirectoryPath + `/tts_${Date.now()}.mp3`;
-  await RNFS.writeFile(uri, base64, 'base64');
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  const uri = CachesDirectoryPath + `/tts_${Date.now()}.mp3`;
+  await writeFile(uri, base64, 'base64');
   return uri;
 }

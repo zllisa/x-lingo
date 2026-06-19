@@ -37,6 +37,7 @@ export interface AudioFile {
 export interface TranscriptItem {
   time: string;
   ko: string;
+  roma: string;
   zh: string;
   active: boolean;
 }

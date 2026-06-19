@@ -14,21 +14,21 @@ export const MOCK_AUDIO_FILES: AudioFile[] = [
 
 export const MOCK_TRANSCRIPTS: Record<string, TranscriptItem[]> = {
   '1': [
-    { time: '00:12', ko: '안녕하세요, 오늘은 새로운 coffee 메뉴를 소개해 드리겠습니다.', zh: '大家好，今天我来介绍新的咖啡菜单。', active: false },
-    { time: '00:18', ko: '이 메뉴는 정말 special 하고 맛있어요.', zh: '这个菜单真的很特别而且好吃。', active: false },
-    { time: '00:24', ko: '먼저, 아이스 아메리카노는 기본이죠.', zh: '首先，冰美式是基本的。', active: false },
-    { time: '00:30', ko: '그리고 저희만의 signature 라떼도 준비되어 있습니다.', zh: '而且我们也准备了独家招牌拿铁。', active: false },
-    { time: '00:37', ko: '가격은 매우 reasonable 하게 책정했어요.', zh: '价格定得非常合理。', active: false },
-    { time: '00:42', ko: '많이 찾아주시고 즐거운 시간 보내세요!', zh: '请多多光临，祝大家度过愉快时光！', active: false },
+    { time: '00:12', ko: '안녕하세요, 오늘은 새로운 coffee 메뉴를 소개해 드리겠습니다.', roma: 'annyeonghaseyo, oneureun saeroun coffee menyureul sogaehae deurigetseumnida.', zh: '大家好，今天我来介绍新的咖啡菜单。', active: false },
+    { time: '00:18', ko: '이 메뉴는 정말 special 하고 맛있어요.', roma: 'i menyuneun jeongmal special hago masisseoyo.', zh: '这个菜单真的很特别而且好吃。', active: false },
+    { time: '00:24', ko: '먼저, 아이스 아메리카노는 기본이죠.', roma: 'meonjeo, aiseu amerikano-neun gibonijyo.', zh: '首先，冰美式是基本的。', active: false },
+    { time: '00:30', ko: '그리고 저희만의 signature 라떼도 준비되어 있습니다.', roma: 'geurigo jeohuiman-ui signature rattedo junbidoeeo itseumnida.', zh: '而且我们也准备了独家招牌拿铁。', active: false },
+    { time: '00:37', ko: '가격은 매우 reasonable 하게 책정했어요.', roma: 'gagyeogeun maeu reasonable hage chaekjeonghaesseoyo.', zh: '价格定得非常合理。', active: false },
+    { time: '00:42', ko: '많이 찾아주시고 즐거운 시간 보내세요!', roma: 'mani chajajusigo jeulgeoun sigan bonaeseyo!', zh: '请多多光临，祝大家度过愉快时光！', active: false },
   ],
   '2': [
-    { time: '00:08', ko: '오늘 인터뷰에 응해 주셔서 감사합니다.', zh: '感谢您今天接受采访。', active: false },
-    { time: '00:15', ko: '저희 마케팅 팀은 creative 한 아이디어로 유명하죠.', zh: '我们营销团队以创意点子闻名。', active: false },
-    { time: '00:24', ko: '이번 프로젝트의 key point 는 무엇인가요?', zh: '这次项目的关键点是什么？', active: false },
+    { time: '00:08', ko: '오늘 인터뷰에 응해 주셔서 감사합니다.', roma: 'oneul inteobyue eunghae jusyeoseo gamsahamnida.', zh: '感谢您今天接受采访。', active: false },
+    { time: '00:15', ko: '저희 마케팅 팀은 creative 한 아이디어로 유명하죠.', roma: 'jeohui maketing timeun creative han aidieoro yumyeonghajyo.', zh: '我们营销团队以创意点子闻名。', active: false },
+    { time: '00:24', ko: '이번 프로젝트의 key point 는 무엇인가요?', roma: 'ibeon peurojekteuui key point neun mueosingayo?', zh: '这次项目的关键点是什么？', active: false },
   ],
   '3': [
-    { time: '00:05', ko: '다음 대화를 잘 듣고 질문에 답하세요.', zh: '请仔细听以下对话并回答问题。', active: false },
-    { time: '00:12', ko: '여행 계획에 대해 이야기하고 있습니다.', zh: '正在讨论旅行计划。', active: false },
+    { time: '00:05', ko: '다음 대화를 잘 듣고 질문에 답하세요.', roma: 'daeum daehwareul jal deutgo jilmun-e dapaseyo.', zh: '请仔细听以下对话并回答问题。', active: false },
+    { time: '00:12', ko: '여행 계획에 대해 이야기하고 있습니다.', roma: 'yeohaeng gyehoek-e daehae iyagihago itseumnida.', zh: '正在讨论旅行计划。', active: false },
   ],
 };
 

@@ -36,7 +36,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>需要使用麦克风录制韩语语音</string>
+	<string>需要使用麦克风录制</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选择视频</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

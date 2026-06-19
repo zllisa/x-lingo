@@ -17,11 +17,23 @@ export async function loadCheckinsFromCloud(userId: string): Promise<string[]> {
 }
 
 // ─── Vocabulary Sync ─────────────────────────────────────────
+// Replace the cloud snapshot safely: insert the new rows first, and only delete
+// the previous rows once the insert succeeds. This avoids wiping cloud data when
+// the insert fails mid-way (a plain delete-then-insert can leave it empty).
 export async function syncVocabularyToCloud(userId: string, words: any[]) {
-  // Simple approach: delete all and re-insert (for small datasets)
-  await supabase.from('vocabulary').delete().eq('user_id', userId);
+  const { data: existing, error: selErr } = await supabase
+    .from('vocabulary').select('id').eq('user_id', userId);
+  if (selErr) return; // bail without touching anything
+
   if (words.length > 0) {
-    await supabase.from('vocabulary').insert(words.map(w => ({ user_id: userId, word_data: w })));
+    const { error: insErr } = await supabase
+      .from('vocabulary').insert(words.map(w => ({ user_id: userId, word_data: w })));
+    if (insErr) return; // insert failed → leave old data intact
+  }
+
+  const oldIds = (existing || []).map((r: any) => r.id);
+  if (oldIds.length > 0) {
+    await supabase.from('vocabulary').delete().in('id', oldIds);
   }
 }
 
@@ -32,9 +44,19 @@ export async function loadVocabularyFromCloud(userId: string): Promise<any[]> {
 
 // ─── Sentences Sync ──────────────────────────────────────────
 export async function syncSentencesToCloud(userId: string, sentences: any[]) {
-  await supabase.from('sentences').delete().eq('user_id', userId);
+  const { data: existing, error: selErr } = await supabase
+    .from('sentences').select('id').eq('user_id', userId);
+  if (selErr) return;
+
   if (sentences.length > 0) {
-    await supabase.from('sentences').insert(sentences.map(s => ({ user_id: userId, sentence_data: s })));
+    const { error: insErr } = await supabase
+      .from('sentences').insert(sentences.map(s => ({ user_id: userId, sentence_data: s })));
+    if (insErr) return;
+  }
+
+  const oldIds = (existing || []).map((r: any) => r.id);
+  if (oldIds.length > 0) {
+    await supabase.from('sentences').delete().in('id', oldIds);
   }
 }
 

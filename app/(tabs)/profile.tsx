@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import RNFS from '@dr.pogodin/react-native-fs';
+import { DocumentDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
 import Share from 'react-native-share';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -46,8 +46,8 @@ export default function ProfileScreen() {
         words, sentences,
         exportedAt: new Date().toISOString(),
       }, null, 2);
-      const path = RNFS.DocumentDirectoryPath + '/klingo_backup.json';
-      await RNFS.writeFile(path, data, 'utf8');
+      const path = DocumentDirectoryPath + '/klingo_backup.json';
+      await writeFile(path, data, 'utf8');
       await Share.open({ url: 'file://' + path, type: 'application/json' });
     } catch (e: any) {
       if (e?.message !== 'User did not share') {
