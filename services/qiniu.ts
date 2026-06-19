@@ -80,7 +80,10 @@ export async function uploadToQiniu(fileUri: string): Promise<string> {
 async function triggerTranscode(key: string): Promise<string> {
   const body = new URLSearchParams({
     bucket: QINIU_BUCKET, key,
-    fops: 'avthumb/mp3/ab/128k',
+    // WAV is Azure STT's recommended format — no codec compatibility issues,
+    // no ID3/metadata headers, just raw PCM that Azure decodes natively.
+    // 16kHz mono 16-bit PCM is the optimal setting for speech recognition.
+    fops: 'avthumb/wav/acodec/pcm_s16le/ar/16000/ac/1',
   }).toString();
 
   const resp = await fetch('https://api.qiniu.com/pfop/', {
@@ -143,7 +146,7 @@ export async function qiniuExtractAudio(videoUri: string): Promise<string> {
 
   // 3. Download via RNFS (native, no JS memory pressure)
   const downloadUrl = `${QINIU_DOMAIN}/${outputKey}`;
-  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.mp3`;
+  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.wav`;
 
   console.log('[Qiniu] Downloading', downloadUrl, '→', localPath);
   const dl = downloadFile({
