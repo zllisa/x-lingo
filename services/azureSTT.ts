@@ -76,23 +76,43 @@ export async function azureSTTWithTimestamps(fileUri: string): Promise<AzureSTTS
     throw new Error(`音频文件过小 (${bytes.length} B)`);
   }
 
-  // Azure STT REST API
+  // Azure STT REST API — retry 429 (free tier concurrency limit) with backoff
   const url = `${ENDPOINT(region)}?${new URLSearchParams({ language: 'ko-KR', format: 'detailed' }).toString()}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Ocp-Apim-Subscription-Key': key,
-      'Content-Type': contentType,
-      Accept: 'application/json',
-    },
-    body: bytes.buffer as any,
-  });
+  let response: Response | undefined;
+  let lastError: string = '';
 
-  if (!response.ok) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': key,
+        'Content-Type': contentType,
+        Accept: 'application/json',
+      },
+      body: bytes.buffer as any,
+    });
+
+    if (response.ok) break;
+
     const errBody = await response.text().catch(() => '');
+    lastError = errBody;
+
+    if (response.status === 429 && attempt < 3) {
+      const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+      console.log('[Azure STT] Rate limited (429), retrying in', delay / 1000, 's...');
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+
     throw new Error(
       `Azure HTTP ${response.status}\nRegion: ${region} Type: ${contentType} Bytes: ${bytes.length}\n${errBody}`,
+    );
+  }
+
+  if (!response || !response.ok) {
+    throw new Error(
+      `Azure HTTP ${response?.status || '?'}\nRegion: ${region} Type: ${contentType} Bytes: ${bytes.length}\n${lastError}`,
     );
   }
 

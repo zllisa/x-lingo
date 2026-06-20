@@ -9,9 +9,9 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useSpeakStore } from '../../stores/useSpeakStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useState } from 'react';
+import { GraduationCap, Pencil, Target, FileText, ClipboardList, MessageCircle, Settings, Dices, UserPen, X } from 'lucide-react-native';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
-
 const SUPERLATIVES = ['努力', '勤奋', '可爱', '元气', '认真', '温柔', '帅气', '聪明', '热情', '耐心', '刻苦', '自信', '执着', '励志', '自律'];
 const NOUNS = ['韩语达人', '学习家', '追梦人', '练习生', '留学党', '韩剧迷', 'K-pop粉', '语言控', '口语王', '字幕君', '文化通', '小能手', '小天才', '探索者', '旅行家'];
 
@@ -64,11 +64,14 @@ export default function ProfileScreen() {
         {/* Profile header */}
         <View style={[S.row, S.gap3, S.mb4]}>
           <TouchableOpacity style={[S.w14, S.roundedFull, { backgroundColor: 'rgba(124,92,252,0.2)' }, S.center]} onPress={() => { setShowPicker(true); }}>
-            <Text style={{ fontSize: 28 }}>👩‍🎓</Text>
+            <GraduationCap size={32} color={C.accent} />
           </TouchableOpacity>
           <View style={S.flex1}>
             <TouchableOpacity onPress={() => { setNickInput(profile.nickname); setEditNickname(true); }}>
-              <Text style={[S.textBase, S.bold, S.text]}>{profile.nickname} ✏️</Text>
+              <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                <Text style={[S.textBase, S.bold, S.text]}>{profile.nickname}</Text>
+                <Pencil size={14} color={C.text2} />
+              </View>
             </TouchableOpacity>
             {isLoggedIn ? (
               <Text style={[S.textXs, S.text3]}>{email}</Text>
@@ -84,7 +87,10 @@ export default function ProfileScreen() {
         {canCheckin ? (
           <TouchableOpacity style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.3)' }, S.roundedCard, S.p4, S.mb4, S.flexRow, S.spaceBetween, S.itemsCenter]} onPress={handleCheckin}>
             <View>
-              <Text style={[S.textSm, S.textAccent, S.bold]}>🎯 今日已达 10 分钟</Text>
+              <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                <Target size={16} color={C.accent} />
+                <Text style={[S.textSm, S.textAccent, S.bold]}>今日已达 10 分钟</Text>
+              </View>
               <Text style={[S.textXs, S.text3]}>已学 {todayStudyMinutes} 分钟，点击打卡</Text>
             </View>
             <View style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 16, paddingVertical: 8 }]}>
@@ -93,7 +99,10 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ) : (
           <View style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.2)' }, S.roundedCard, S.p4, S.mb4]}>
-            <Text style={[S.textSm, S.textAccent, S.bold]}>📝 今日学习</Text>
+            <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+              <FileText size={16} color={C.accent} />
+              <Text style={[S.textSm, S.textAccent, S.bold]}>今日学习</Text>
+            </View>
             <Text style={[S.textXs, S.text3, S.mt1]}>已学 {todayStudyMinutes} 分钟，满 10 分钟可打卡</Text>
           </View>
         )}
@@ -114,20 +123,26 @@ export default function ProfileScreen() {
         </View>
 
         {/* Learning records */}
-        <Text style={[S.textSm, S.semibold, S.text, S.mb2]}>📋 学习记录</Text>
-        {[{ icon: '💬', title: `最近对话 (${chatHistory.length} 条消息)`, time: chatHistory.length > 0 ? '今天' : '暂无' }].map((r, i) => (
+        <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+          <ClipboardList size={16} color={C.text} />
+          <Text style={[S.textSm, S.semibold, S.text]}>学习记录</Text>
+        </View>
+        {[{ title: `最近对话 (${chatHistory.length} 条消息)`, time: chatHistory.length > 0 ? '今天' : '暂无' }].map((r, i) => (
           <TouchableOpacity key={i} style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mb2, S.flexRow]}>
-            <Text style={[S.textXl, S.mr3]}>{r.icon}</Text>
+            <MessageCircle size={20} color={C.text2} style={{ marginRight: 12 }} />
             <View style={S.flex1}><Text style={[S.textSm, S.text, { fontWeight: '500' }]}>{r.title}</Text><Text style={[S.textXs, S.text3, S.mt05]}>{r.time}</Text></View>
             <Text style={S.text3}>›</Text>
           </TouchableOpacity>
         ))}
 
         {/* Settings */}
-        <Text style={[S.textSm, S.semibold, S.text, { marginTop: 16 }, S.mb2]}>⚙️ 系统设置</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1, { marginTop: 16 }, S.mb2]}>
+          <Settings size={16} color={C.text} />
+          <Text style={[S.textSm, S.semibold, S.text]}>系统设置</Text>
+        </View>
         {[
           { label: '罗马音默认显示', right: settings.romaVisible ? '开启' : '关闭', onPress: () => updateSettings({ romaVisible: !settings.romaVisible }) },
-          { label: '音频播放语速', right: `${settings.playbackSpeed}×`, onPress: () => { const speeds = [0.5, 0.75, 1, 1.5, 2]; const idx = speeds.indexOf(settings.playbackSpeed); updateSettings({ playbackSpeed: speeds[(idx + 1) % speeds.length] }); } },
+          { label: '音频播放语速', right: `${settings.playbackSpeed}×`, onPress: () => { const speeds = [0.5, 0.75, 0.85, 1, 1.5, 2]; const idx = speeds.indexOf(settings.playbackSpeed); updateSettings({ playbackSpeed: speeds[(idx + 1) % speeds.length] }); } },
           { label: '导出学习数据', right: '›', onPress: handleExport },
           ...(isLoggedIn ? [{ label: `已登录：${email}`, right: '退出', onPress: () => { Alert.alert('退出登录', '确定要退出吗？', [{ text: '取消' }, { text: '确定', onPress: () => { logout(); navigation.reset({ index: 0, routes: [{ name: 'Login' }] }); } }]); } }] : []),
         ].map((s, i) => (
@@ -151,7 +166,10 @@ export default function ProfileScreen() {
               autoFocus
             />
             <TouchableOpacity style={[S.mb2]} onPress={() => setNickInput(randomNickname())}>
-              <Text style={[S.textXs, S.textAccent]}>🎲 随机生成一个</Text>
+              <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                <Dices size={14} color={C.accent} />
+                <Text style={[S.textXs, S.textAccent]}>随机生成一个</Text>
+              </View>
             </TouchableOpacity>
             <View style={[S.row, S.gap2]}>
               <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.border, S.itemsCenter]} onPress={() => setEditNickname(false)}>
@@ -170,12 +188,18 @@ export default function ProfileScreen() {
         <View style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
           <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '60%' as any }]}>
             <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, S.px5, { paddingTop: 20, paddingBottom: 12 }]}>
-              <Text style={[S.textBase, S.bold, S.text]}>🎭 换个昵称</Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)}><Text style={[S.textLg, S.text2]}>✕</Text></TouchableOpacity>
+              <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                <UserPen size={20} color={C.text} />
+                <Text style={[S.textBase, S.bold, S.text]}>换个昵称</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPicker(false)}><X size={20} color={C.text2} /></TouchableOpacity>
             </View>
             <ScrollView style={{ paddingHorizontal: 20, paddingBottom: 32 }}>
               <TouchableOpacity style={[S.bgAccent, S.roundedCard, S.p4, S.itemsCenter, S.mb3]} onPress={() => { setNickInput(randomNickname()); setEditNickname(true); setShowPicker(false); }}>
-                <Text style={[S.textWhite, S.semibold, S.textSm]}>🎲 随机组合</Text>
+                <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                  <Dices size={16} color={'#fff'} />
+                  <Text style={[S.textWhite, S.semibold, S.textSm]}>随机组合</Text>
+                </View>
               </TouchableOpacity>
               {SUPERLATIVES.flatMap(adj => NOUNS.map(noun => adj + '的' + noun)).slice(0, 30).map((name, i) => (
                 <TouchableOpacity key={i} style={[S.py2, S.borderBottom]} onPress={() => { setProfile({ nickname: name }); setShowPicker(false); }}>

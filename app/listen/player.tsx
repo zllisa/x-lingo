@@ -1,15 +1,49 @@
-import { View, Text, TouchableOpacity, FlatList, Switch, ActivityIndicator, Alert } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  BookOpen, ChevronLeft, Copy,
+  MessageCircle,
+  Mic,
+  Pause, Play, Repeat,
+  SkipBack, SkipForward, Star, Type, Volume2, X,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import {
+  ActivityIndicator, Alert, FlatList, Modal, ScrollView, Text,
+  TouchableOpacity, View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { transcribeFile } from '../../services/transcription';
+import {
+  addPlaybackListener,
+  getStatus,
+  load,
+  pause,
+  play,
+  seek,
+  setLooping,
+  setRate,
+  unload,
+  type PlaybackEvent,
+} from '../../services/VariAudioPlayer';
+import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useListenStore } from '../../stores/useListenStore';
 import { useProfileStore } from '../../stores/useProfileStore';
-import { transcribeFile } from '../../services/transcription';
-import { S, C } from '../../utils/theme';
+import { C, S } from '../../utils/theme';
+import { RootStackParamList } from '../App';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const formatMs = (ms: number) => {
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+const MAIN_ID = 'main';
 
 export default function PlayerScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const {
     audioFiles, activeFileId, transcripts, showTranslation, toggleTranslation,
@@ -19,34 +53,89 @@ export default function PlayerScreen() {
   const file = audioFiles.find(f => f.id === activeFileId);
   const items = activeFileId ? transcripts[activeFileId] || [] : [];
 
-  // ── Transcription state ──
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeMsg, setTranscribeMsg] = useState('');
 
-  // ── Audio playback state ──
-  const [duration, setDuration] = useState(0);
-  const [currentPos, setCurrentPos] = useState(0);
-  const audio = useRef(new AudioRecorderPlayer());
+  const [durationMs, setDurationMs] = useState(0);
+  const [currentMs, setCurrentMs] = useState(0);
+  const [loopMode, setLoopMode] = useState(false);
+  const loopRef = useRef(false);
+  const rateRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcriptListRef = useRef<FlatList<any>>(null);
 
-  // ── Study timer ──
-  useFocusEffect(
-    useCallback(() => {
-      timerRef.current = setInterval(() => {
-        useProfileStore.getState().addStudyMinute();
-      }, 60000);
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        try { audio.current.stopPlayer(); } catch {}
-      };
-    }, []),
-  );
+  // Echo
+  const [echoVisible, setEchoVisible] = useState(false);
+  const [echoIdx, setEchoIdx] = useState(0);
+  const [echoPlaying, setEchoPlaying] = useState(false);
+  const [echoCopied, setEchoCopied] = useState(false);
+  const echoIdxRef = useRef(0);
+  const grammarPoints = useLibraryStore(s => s.grammarPoints);
 
-  // Cleanup on unmount
+  // Explain — persisted in store alongside transcript, survives app restart
+  const [showExplain, setShowExplain] = useState(false);
+  const [explaining, setExplaining] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    timerRef.current = setInterval(() => {
+      useProfileStore.getState().addStudyMinute();
+    }, 60000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      // Pause playback when leaving the screen
+      pause(MAIN_ID).catch(() => {});
+      setPlaying(false);
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+  }, []));
+
+  // ── Position poll: native AVAudioPlayer only fires events at play/pause/finish,
+  //     not continuously.  Poll getStatus() while playing for smooth UI updates. ──
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (isPlaying) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await getStatus(MAIN_ID);
+          setCurrentMs(s.position);
+          setDurationMs(s.duration);
+          setProgress(s.duration > 0 ? (s.position / s.duration) * 100 : 0);
+          if (!s.isPlaying) setPlaying(false);
+          if (items.length > 0) {
+            const idx = findTranscriptIndex(items, s.position / 1000);
+            if (idx >= 0) {
+              setTranscriptIdx(idx);
+              // Auto-scroll transcript to follow playback
+              try {
+                transcriptListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+              } catch {}
+            }
+          }
+        } catch {}
+      }, 200);
+    } else {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [isPlaying]);
+
+  // ── Native playback listener (handles finish events) ──
+  useEffect(() => {
+    const sub = addPlaybackListener((ev: PlaybackEvent) => {
+      if (ev.id === MAIN_ID && ev.didFinish) {
+        setPlaying(false);
+        setCurrentMs(0);
+        setProgress(0);
+      }
+    });
+    return () => { sub.remove(); };
+  }, []);
+
+  // Cleanup
   useEffect(() => {
     return () => {
-      try { audio.current.stopPlayer(); } catch {}
-      try { audio.current.removePlayBackListener(); } catch {}
+      unload(MAIN_ID).catch(() => {});
+      unload(MAIN_ID).catch(() => {});
     };
   }, []);
 
@@ -59,7 +148,7 @@ export default function PlayerScreen() {
       const result = await transcribeFile(file.uri, (msg) => setTranscribeMsg(msg));
       useListenStore.getState().setTranscript(activeFileId, result);
     } catch (e: any) {
-      console.error('STT transcription error:', e?.message, e);
+      console.error('STT error:', e?.message, e);
       Alert.alert('识别失败', e?.message || '请确认音频包含韩语内容，且网络连接正常');
     } finally {
       setTranscribing(false);
@@ -67,236 +156,507 @@ export default function PlayerScreen() {
     }
   };
 
-  // ── Audio playback ──
+  // ── Main playback ──
   const togglePlayback = async () => {
     if (!file?.uri) return;
-    const a = audio.current;
-
-    if (isPlaying) {
-      // Pause
-      try { await a.pausePlayer(); } catch {}
-      setPlaying(false);
-    } else {
-      try {
-        try { await a.stopPlayer(); } catch {}
-        try { a.removePlayBackListener(); } catch {}
-
-        // Always start fresh from current position
-        await a.startPlayer(file.uri);
-        if (currentPos > 0) {
-          try { await a.seekToPlayer(currentPos); } catch {}
+    try {
+      if (isPlaying) {
+        await pause(MAIN_ID);
+        setPlaying(false);
+      } else {
+        try {
+          await load(MAIN_ID, file.uri, rateRef.current, loopRef.current);
+        } catch (e: any) {
+          console.warn('[Player] load failed:', file.uri, e?.message);
+          // File may have been cleaned by iOS — show a clear prompt
+          Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
+          return;
         }
-
-        a.addPlayBackListener((e) => {
-          setCurrentPos(e.currentPosition);
-          setDuration(e.duration);
-          const pct = e.duration > 0 ? (e.currentPosition / e.duration) * 100 : 0;
-          setProgress(pct);
-
-          // Auto-advance transcript highlight based on playback position
-          if (items.length > 0) {
-            const posSec = e.currentPosition / 1000;
-            const idx = items.findIndex((item, i) => {
-              const [m, s] = item.time.split(':').map(Number);
-              const itemStart = m * 60 + s;
-              const nextItem = items[i + 1];
-              if (!nextItem) return true;
-              const [nm, ns] = nextItem.time.split(':').map(Number);
-              const nextStart = nm * 60 + ns;
-              return posSec >= itemStart && posSec < nextStart;
-            });
-            if (idx >= 0 && idx !== useListenStore.getState().transcriptIdx) {
-              setTranscriptIdx(idx);
-            }
-          }
-
-          // Auto-stop at end
-          if (e.currentPosition >= e.duration && e.duration > 0) {
-            setPlaying(false);
-            setCurrentPos(0);
-            setProgress(0);
-            try { a.stopPlayer(); } catch {}
-          }
-        });
-
+        await play(MAIN_ID);
         setPlaying(true);
-      } catch (e: any) {
-        Alert.alert('播放失败', e?.message || '无法播放该文件');
       }
+    } catch (e: any) { Alert.alert('播放失败', e?.message || '无法播放该文件'); }
+  };
+
+  const seekTo = async (ms: number) => {
+    setCurrentMs(ms);
+    setProgress(durationMs > 0 ? (ms / durationMs) * 100 : 0);
+    try {
+      if (!file?.uri) return;
+      try { await load(MAIN_ID, file.uri, rateRef.current, loopRef.current); } catch (e: any) { console.warn('[Player] seekTo load failed:', file.uri, e?.message); return; }
+      await seek(MAIN_ID, ms);
+    } catch {
+      console.warn('[Player] seekTo failed');
     }
   };
 
-  // Seek to a specific transcript line
-  const seekToTranscript = async (index: number) => {
+  const seekToTranscriptIdx = async (index: number) => {
     setTranscriptIdx(index);
     const item = items[index];
-    if (!item || !file?.uri) return;
+    if (!item) return;
     const [m, s] = item.time.split(':').map(Number);
-    const seekMs = (m * 60 + s) * 1000;
-    setCurrentPos(seekMs);
-    setProgress(duration > 0 ? (seekMs / duration) * 100 : 0);
+    await seekTo((m * 60 + s) * 1000);
+    // Start playback after seeking (tap-to-play)
+    try { await play(MAIN_ID); } catch {}
+    setPlaying(true);
+  };
+
+  const changeRate = async (r: number) => {
+    setSpeed(r);
+    rateRef.current = r;
+    try { await setRate(MAIN_ID, r); } catch {}
+  };
+
+  const changeLoop = async (l: boolean) => {
+    loopRef.current = l;
+    setLoopMode(l);
+    try { await setLooping(MAIN_ID, l); } catch {}
+  };
+
+  const echoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const echoActiveRef = useRef(false);
+
+  // ── Echo — plays a single sentence from the ORIGINAL audio on repeat ──
+  const playEchoLoop = async (index: number) => {
+    if (!echoActiveRef.current) return;
+    const item = items[index];
+    if (!item) return;
+
+    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+
+    const [sm, ss] = item.time.split(':').map(Number);
+    const startMs = (sm * 60 + ss) * 1000;
+
+    let endMs = durationMs;
+    if (index + 1 < items.length) {
+      const [em, es] = items[index + 1].time.split(':').map(Number);
+      endMs = (em * 60 + es) * 1000;
+    }
+    const dur = endMs - startMs;
+
     try {
-      if (!isPlaying) {
-        try { await audio.current.stopPlayer(); } catch {}
-        try { audio.current.removePlayBackListener(); } catch {}
-        await audio.current.startPlayer(file.uri);
-        // Small delay so the player initializes before we seek
-        await new Promise(r => setTimeout(r, 100));
-        await audio.current.seekToPlayer(seekMs);
-        await new Promise(r => setTimeout(r, 50));
-        await audio.current.pausePlayer();
-      } else {
-        await audio.current.seekToPlayer(seekMs);
+      await seek(MAIN_ID, startMs);
+      await play(MAIN_ID);
+      setEchoPlaying(true);
+
+      echoTimeoutRef.current = setTimeout(async () => {
+        if (!echoActiveRef.current) return;
+        setEchoPlaying(false);
+        await pause(MAIN_ID).catch(() => {});
+        if (echoActiveRef.current && echoIdxRef.current === index) {
+          await new Promise(r => setTimeout(r, 800));
+          playEchoLoop(index).catch(() => {});
+        }
+      }, dur);
+    } catch (e) {
+      setEchoPlaying(false);
+    }
+  };
+
+  const startEcho = async () => {
+    // Stop main playback first
+    pause(MAIN_ID).catch(() => {});
+    setPlaying(false);
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+
+    // Ensure native player is loaded (may not be if user opens echo before playing)
+    if (file?.uri) {
+      try {
+        await load(MAIN_ID, file.uri, rateRef.current, loopRef.current);
+      } catch (e: any) {
+        console.warn('[Player] startEcho load failed:', file.uri, e?.message);
+        Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
+        return;
       }
+    }
+
+    echoActiveRef.current = true;
+    const idx = transcriptIdx;
+    echoIdxRef.current = idx;
+    setEchoIdx(idx);
+    setShowExplain(false);
+    setEchoVisible(true);
+    playEchoLoop(idx).catch(() => {});
+  };
+
+  const stopEcho = () => {
+    echoActiveRef.current = false;
+    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+    pause(MAIN_ID).catch(() => {});
+    setEchoPlaying(false);
+    setShowExplain(false);
+    setEchoVisible(false);
+    // Do NOT resume main playback — user dismissed the echo modal, so stop means stop
+  };
+
+  const echoJump = (dir: -1 | 1) => {
+    const ni = echoIdx + dir;
+    if (ni < 0 || ni >= items.length) return;
+    echoIdxRef.current = ni; setEchoIdx(ni);
+    setEchoPlaying(false);
+    // Auto-show explain if the new sentence already has cached explain in store
+    setShowExplain(!!items[ni]?.explain);
+    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+    playEchoLoop(ni).catch(() => {});
+  };
+
+  const echoPauseResume = async () => {
+    if (echoPlaying) {
+      if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+      await pause(MAIN_ID);
+      setEchoPlaying(false);
+    } else {
+      playEchoLoop(echoIdx).catch(() => {});
+    }
+  };
+
+  const echoExplain = async () => {
+    const sentence = items[echoIdx]?.ko;
+    if (!sentence || explaining) return;
+
+    // Check store first — explain persists alongside transcript
+    const cached = items[echoIdx]?.explain;
+    if (cached) { setShowExplain(true); return; }
+
+    setShowExplain(true);
+    setExplaining(true);
+    try {
+      const { deepSeekExplain } = await import('../../services/deepseek');
+      const result = await deepSeekExplain(sentence);
+      useListenStore.getState().setExplain(activeFileId!, echoIdx, result);
+    } catch (e) {
+      useListenStore.getState().setExplain(activeFileId!, echoIdx, { words: [], grammar: [], examples: [], usage: '讲解请求失败，请重试' } as NonNullable<typeof items[0]['explain']>);
+    } finally {
+      setExplaining(false);
+    }
+  };
+
+  const echoCopy = () => {
+    try {
+      require('react-native/Libraries/Components/Clipboard/Clipboard').default.setString(items[echoIdx]?.ko || '');
+      setEchoCopied(true); setTimeout(() => setEchoCopied(false), 1500);
     } catch {}
   };
 
-  // Format current position for display
-  const formatMs = (ms: number) => {
-    const m = Math.floor(ms / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  // ── Echo word tap → WordDetail ──
+  const handleEchoWordPress = (word: string) => {
+    const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
+    if (!clean) return;
+    navigation.navigate('WordDetail', { word: clean, source: 'AI 精听回声跟读' });
   };
 
+  // Render Korean text with tappable words for the echo modal
+  const renderEchoText = (text: string) =>
+    text.split(/(\s+)/).map((part, i) => {
+      if (part.trim() === '') return <Text key={i}>{part}</Text>;
+      if (/[가-힣a-zA-Z]/.test(part)) {
+        return (
+          <Text key={i} style={{ textDecorationLine: 'underline', textDecorationColor: 'rgba(124,92,252,0.3)' }} onPress={() => handleEchoWordPress(part)}>
+            {part}
+          </Text>
+        );
+      }
+      return <Text key={i}>{part}</Text>;
+    });
+
+  // ── Render ──
   return (
-    <View style={S.flex1}>
+    <View style={[S.flex1, S.bg]}>
       {/* Header */}
       <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: 16 }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
-        <TouchableOpacity onPress={() => { setPlaying(false); try { audio.current.stopPlayer(); } catch {} navigation.goBack(); }}>
-          <Text style={[S.textSm, S.textAccent, S.semibold]}>← 返回列表</Text>
+        <TouchableOpacity onPress={() => { unload(MAIN_ID).catch(() => {}); navigation.goBack(); }}>
+          <ChevronLeft size={22} color={C.accent} />
         </TouchableOpacity>
-        <Text style={[S.textSm, S.text2, { marginLeft: 12, flex: 1 }]} numberOfLines={1}>{file?.name || ''}</Text>
+        <Text style={[S.textSm, S.text, S.semibold, { flex: 1, marginLeft: 8 }]} numberOfLines={1}>
+          {file?.name || '精听'}
+        </Text>
+        <TouchableOpacity style={[S.bgAccent15, S.roundedSM, { paddingHorizontal: 10, paddingVertical: 4 }]} onPress={startTranscription}>
+          <Text style={[S.textXs, S.textAccent, S.semibold]}>识别</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Player card */}
-      <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-        <View style={[S.bgSurface, S.roundedCard, S.p4]}>
-          <Text style={[S.textXs, S.text2, S.mb1]}>📁 {file?.name || ''}</Text>
-
-          {/* Progress bar */}
-          <View style={{ height: 4, backgroundColor: C.border, borderRadius: 2, marginBottom: 8 }}>
-            <View style={{ height: 4, backgroundColor: C.accent, borderRadius: 2, width: `${progress}%` as any }} />
-          </View>
-          <View style={[S.spaceBetween, S.mb3]}>
-            <Text style={[S.textXs, S.text3]}>{formatMs(currentPos)}</Text>
-            <Text style={[S.textXs, S.text3]}>{file?.duration || '--:--'}</Text>
-          </View>
-
-          {/* Play controls */}
-          <View style={[S.row, S.justifyCenter, S.gap4, S.itemsCenter]}>
+      {/* Transcript area */}
+      {transcribing ? (
+        <View style={[S.flex1, S.center]}><ActivityIndicator size="large" color={C.accent} /><Text style={[S.textSm, S.text2, S.mt3]}>{transcribeMsg}</Text></View>
+      ) : items.length === 0 ? (
+        <View style={[S.flex1, S.center, S.p4]}><Mic size={40} color={C.text3} /><Text style={[S.textSm, S.text3, S.mt3]}>暂无字幕</Text><TouchableOpacity style={[S.bgAccent, S.roundedFull, S.px5, { paddingVertical: 12 }, S.mt4]} onPress={startTranscription}><Text style={[S.textSm, S.textWhite, S.semibold]}>开始识别字幕 & 罗马文</Text></TouchableOpacity></View>
+      ) : (
+        <FlatList ref={transcriptListRef} style={S.flex1} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }} data={items} keyExtractor={(_, i) => i.toString()}
+          renderItem={({ item, index }) => (
             <TouchableOpacity
-              style={[{ width: 36, height: 36 }, S.roundedFull, S.bgSurface2, S.center]}
-              onPress={() => {
-                const idx = Math.max(0, transcriptIdx - 1);
-                seekToTranscript(idx);
-              }}
+              style={[
+                S.py3, { paddingHorizontal: 12 }, S.roundedSM, S.mb1,
+                index === transcriptIdx
+                  ? { backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }
+                  : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
+              ]}
+              onPress={() => seekToTranscriptIdx(index)}
             >
-              <Text style={S.text}>⏮</Text>
+              <Text style={[S.textXs, S.text3, S.mb1]}>{item.time}</Text>
+              <Text style={[{ fontSize: 17, lineHeight: 30, letterSpacing: 2 }, index === transcriptIdx ? [S.text, S.semibold] : S.text2]}>
+                {item.ko}
+              </Text>
+              {item.roma ? (
+                <Text style={[S.textXxs, { color: C.accent, marginTop: 2, marginLeft: 4, letterSpacing: 0.8 }]}>
+                  {item.roma}
+                </Text>
+              ) : null}
+              {(showTranslation || index === transcriptIdx) && item.zh ? (
+                <Text style={[S.textSm, S.text2, S.mt1]}>{item.zh}</Text>
+              ) : null}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[{ width: 48, height: 48 }, S.roundedFull, S.bgAccent, S.center]}
-              onPress={togglePlayback}
-            >
-              <Text style={[S.textWhite, S.textLg]}>{isPlaying ? '⏸' : '▶'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[{ width: 36, height: 36 }, S.roundedFull, S.bgSurface2, S.center]}
-              onPress={() => {
-                const idx = Math.min(items.length - 1, transcriptIdx + 1);
-                seekToTranscript(idx);
-              }}
-            >
-              <Text style={S.text}>⏭</Text>
-            </TouchableOpacity>
-          </View>
+          )}
+        />
+      )}
 
-          {/* Speed selector (UI only — react-native-audio-recorder-player does not
-              support playback rate changes. To enable real speed control, migrate
-              to expo-av or a native player.) */}
-          <View style={[S.row, S.justifyCenter, S.gap15, S.mt3]}>
+      {/* ═══ Bottom control bar ═══ */}
+      {items.length > 0 && (
+        <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, paddingHorizontal: 16, paddingBottom: insets.bottom + 6 }]}>
+          <View style={{ marginBottom: 8 }}>
+            <View style={{ height: 4, backgroundColor: C.border, borderRadius: 2 }}><View style={{ height: 4, backgroundColor: C.accent, borderRadius: 2, width: `${progress}%` as any }} /></View>
+            <View style={[S.spaceBetween, { marginTop: 4 }]}>
+              <Text style={[S.textXs, S.text3]}>{formatMs(currentMs)}</Text>
+              <TouchableOpacity onPress={() => toggleTranslation()}><Text style={[S.textXs, showTranslation ? S.textAccent : S.text3]}>{showTranslation ? '隐藏译文' : '显示译文'}</Text></TouchableOpacity>
+            </View>
+          </View>
+          <View style={[S.row, S.justifyCenter, S.gap15, S.mb3]}>
             {[0.5, 0.75, 1, 1.5, 2].map(s => (
-              <TouchableOpacity
-                key={s}
-                style={[{ paddingHorizontal: 10, paddingVertical: 4 }, S.roundedFull, playerSpeed === s ? [S.bgAccent, S.borderAccent] : { borderWidth: 1, borderColor: C.border }]}
-                onPress={() => setSpeed(s)}
-              >
+              <TouchableOpacity key={s} style={[{ paddingHorizontal: 10, paddingVertical: 4 }, S.roundedFull, playerSpeed === s ? [S.bgAccent, S.borderAccent] : { borderWidth: 1, borderColor: C.border }]} onPress={() => changeRate(s)}>
                 <Text style={[S.textXs, playerSpeed === s ? S.textWhite : S.text3]}>{s}×</Text>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      </View>
-
-      {/* Translation toggle */}
-      <View style={[S.flexRow, S.itemsCenter, S.gap2, { paddingHorizontal: 16, marginVertical: 12 }]}>
-        <Switch value={showTranslation} onValueChange={toggleTranslation} trackColor={{ false: C.border, true: C.accent }} />
-        <Text style={[S.textXs, S.text2]}>显示译文（轻触展开）</Text>
-      </View>
-
-      {/* Transcribe button (shown when no transcripts yet) */}
-      {!transcribing && items.length === 0 && (
-        <TouchableOpacity
-          style={[{ marginHorizontal: 16, paddingVertical: 14 }, S.roundedCard, S.bgAccent, S.center, S.mb2]}
-          onPress={startTranscription}
-        >
-          <Text style={[S.textSm, S.textWhite, S.semibold]}>🎙 开始识别字幕 & 罗马文</Text>
-          <Text style={[S.textXs, { color: 'rgba(255,255,255,0.7)', marginTop: 4 }]}>
-            通过 AI 提取韩语字幕、中文翻译和罗马字注音
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Transcribing progress */}
-      {transcribing && (
-        <View style={[{ marginHorizontal: 16, paddingVertical: 14 }, S.roundedCard, S.bgSurface2, S.center, S.mb2]}>
-          <ActivityIndicator size="small" color={C.accent} />
-          <Text style={[S.textXs, S.text2, S.mt2]}>{transcribeMsg}</Text>
+          <View style={[S.row, S.itemsCenter, S.justifyCenter, S.gap4]}>
+            <TouchableOpacity style={[S.center, { width: 36, height: 36 }]} onPress={() => changeLoop(!loopMode)}><Repeat size={20} color={loopMode ? C.accent : C.text2} /></TouchableOpacity>
+            <TouchableOpacity style={[{ width: 40, height: 40 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => seekToTranscriptIdx(Math.max(0, transcriptIdx - 1))}><SkipBack size={18} color={C.text} /></TouchableOpacity>
+            <TouchableOpacity style={[{ width: 56, height: 56 }, S.roundedFull, S.bgAccent, S.center]} onPress={togglePlayback}>{isPlaying ? <Pause size={26} color="#fff" fill="#fff" /> : <Play size={26} color="#fff" fill="#fff" />}</TouchableOpacity>
+            <TouchableOpacity style={[{ width: 40, height: 40 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => seekToTranscriptIdx(Math.min(items.length - 1, transcriptIdx + 1))}><SkipForward size={18} color={C.text} /></TouchableOpacity>
+            <TouchableOpacity style={[S.center, { width: 36, height: 36 }]} onPress={startEcho}><Volume2 size={20} color={C.text2} /></TouchableOpacity>
+          </View>
         </View>
       )}
 
-      {/* Re-transcribe button (shown when transcripts exist) */}
-      {!transcribing && items.length > 0 && (
-        <TouchableOpacity
-          style={[{ marginHorizontal: 16, paddingVertical: 8, marginBottom: 8 }, S.roundedSM, S.border, S.center]}
-          onPress={startTranscription}
-        >
-          <Text style={[S.textXs, S.textAccent]}>🔄 重新识别</Text>
-        </TouchableOpacity>
-      )}
+      {/* ═══ Echo Modal ═══ */}
+      <Modal visible={echoVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={[S.flex1, S.bg]}>
+          {/* Header */}
+          <View style={[{ paddingTop: 16, paddingBottom: 12, paddingHorizontal: 16 }, S.flexRow, S.spaceBetween, S.itemsCenter]}>
+            <View style={[S.flexRow, S.itemsCenter, S.gap2]}>
+              <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: C.accent }} />
+              <Text style={[S.textSm, S.semibold, S.text]}>回声跟读</Text>
+            </View>
+            <TouchableOpacity onPress={stopEcho}><X size={22} color={C.text2} /></TouchableOpacity>
+          </View>
 
-      {/* Transcript list */}
-      <FlatList
-        style={[S.flex1, { paddingHorizontal: 16 }]}
-        data={items}
-        keyExtractor={(_, i) => i.toString()}
-        renderItem={({ item, index }) => (
-          <TouchableOpacity
-            style={[
-              S.p3, S.roundedSM, S.mb1,
-              index === transcriptIdx
-                ? { backgroundColor: 'rgba(124,92,252,0.1)', borderLeftWidth: 3, borderLeftColor: C.accent }
-                : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
-            ]}
-            onPress={() => seekToTranscript(index)}
-          >
-            <Text style={[S.textXs, S.text3, S.mb05]}>{item.time}</Text>
-            <Text style={[S.textSm, index === transcriptIdx ? S.text : S.text2]}>{item.ko}</Text>
-            {item.roma ? (
-              <Text style={[S.textXs, { color: C.accent, marginTop: 2, fontStyle: 'italic' }]}>{item.roma}</Text>
-            ) : null}
-            {showTranslation && item.zh ? (
-              <Text style={[S.textXs, S.text3, S.mt1, S.ml10]}>{item.zh}</Text>
-            ) : null}
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          !transcribing ? (
-            <Text style={[S.textCenter, S.text3, { paddingVertical: 40 }]}>
-              点击上方按钮开始 AI 识别
+          {/* Sentence display — scrollable when explain is shown */}
+          <ScrollView style={S.flex1} contentContainerStyle={[S.center, { paddingHorizontal: 24, paddingVertical: 24 }]}>
+            {/* Counter */}
+            <View style={[S.bgAccent5, S.roundedFull, { paddingHorizontal: 16, paddingVertical: 6 }, S.mb4]}>
+              <Text style={[S.textXs, S.textAccent, S.semibold]}>{echoIdx + 1} / {items.length}</Text>
+            </View>
+
+            {/* Korean text — words tappable for lookup */}
+            <Text style={[S.text2xl, S.text, S.bold, S.textCenter, { lineHeight: 40, marginBottom: 12 }]}>
+              {items[echoIdx]?.ko ? renderEchoText(items[echoIdx].ko) : ''}
             </Text>
-          ) : null
-        }
-      />
+
+            {/* Romanization — one line per Korean line */}
+            {items[echoIdx]?.roma ? (
+              <View style={[{ borderLeftWidth: 2, borderLeftColor: 'rgba(124,92,252,0.3)', paddingLeft: 12, marginBottom: 8 }]}>
+                <Text style={[S.textXs, { color: C.accent, letterSpacing: 1 }]}>
+                  {items[echoIdx].roma}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Translation */}
+            {items[echoIdx]?.zh ? (
+              <Text style={[S.textBase, S.text2, S.textCenter, { lineHeight: 26 }]}>
+                {items[echoIdx].zh}
+              </Text>
+            ) : null}
+
+            {/* AI Explain section — reads from store (persisted across restarts) */}
+            {showExplain && (
+              <View style={{ width: '100%', marginTop: 20 }}>
+                {explaining ? (
+                  <View style={[S.center, S.py4]}>
+                    <ActivityIndicator size="small" color={C.accent} />
+                    <Text style={[S.textXs, S.text2, S.mt2]}>AI 正在分析...</Text>
+                  </View>
+                ) : null}
+
+                {(() => {
+                  const rawExp = items[echoIdx]?.explain as any;
+                  if (!rawExp) return null;
+                  // Sanitize cached explain data — DeepSeek may have stored
+                  // nested objects where strings were expected
+                  const exp = {
+                    words: (Array.isArray(rawExp.words) ? rawExp.words : []).map((w: any) => ({
+                      word: typeof w?.word === 'string' ? w.word : String(w?.word ?? ''),
+                      meaning: typeof w?.meaning === 'string' ? w.meaning : String(w?.meaning ?? ''),
+                    })),
+                    grammar: (Array.isArray(rawExp.grammar) ? rawExp.grammar : []).map((g: any) => ({
+                      text: typeof g === 'string' ? g : typeof g?.text === 'string' ? g.text : String(g?.text ?? ''),
+                      level: (typeof g === 'object' && g && ['beginner', 'intermediate', 'advanced'].includes(g.level)) ? g.level : 'beginner' as const,
+                    })),
+                    examples: (Array.isArray(rawExp.examples) ? rawExp.examples : []).map((e: any) => String(e ?? '')),
+                    usage: typeof rawExp?.usage === 'string' ? rawExp.usage : String(rawExp?.usage ?? ''),
+                  };
+                  return (
+                    <>
+                      {/* Word-by-word */}
+                      {exp.words.length > 0 && (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <Type size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>逐词释义</Text>
+                          </View>
+                          {exp.words.map((w: {word: string, meaning: string}, i: number) => {
+                            const word = typeof w?.word === 'string' ? w.word : String(w?.word ?? '');
+                            const meaning = typeof w?.meaning === 'string' ? w.meaning : String(w?.meaning ?? '');
+                            return (
+                            <View key={i} style={[S.flexRow, { paddingVertical: 4, borderBottomWidth: i < exp.words.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
+                              <Text style={[S.textSm, S.text, S.bold, { minWidth: 90 }]}>{word}</Text>
+                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{meaning}</Text>
+                            </View>
+                            );
+                          })}
+                        </View>
+                      )}
+
+                      {/* Grammar */}
+                      {exp.grammar.length > 0 && (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <BookOpen size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>语法分析</Text>
+                          </View>
+                          {exp.grammar.map((g: {text: string, level: 'beginner'|'intermediate'|'advanced'}, i: number) => {
+                            // Defensive: DeepSeek may return nested objects; always coerce to string
+                            const text: string = typeof g === 'string' ? g : (typeof g?.text === 'string' ? g.text : String(g?.text ?? ''));
+                            const level: 'beginner' | 'intermediate' | 'advanced' =
+                              (typeof g === 'object' && g && ['beginner', 'intermediate', 'advanced'].includes(g.level)) ? g.level : 'beginner';
+                            const isCollected = grammarPoints.some(gp => gp.ko === text);
+                            return (
+                              <View key={i} style={[S.flexRow, S.spaceBetween, S.itemsCenter, { paddingVertical: 4 }]}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{text}</Text>
+                                  <View style={[S.row, S.gap15, { marginTop: 2 }]}>
+                                    <Text style={[S.textXs, { color: level === 'beginner' ? C.green : level === 'intermediate' ? C.orange : C.pink }]}>
+                                      {level === 'beginner' ? '初级' : level === 'intermediate' ? '中级' : '高级'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <TouchableOpacity style={{ paddingLeft: 12 }} onPress={() => {
+                                  if (isCollected) return;
+                                  const { ko } = items[echoIdx] || {};
+                                  const sentence = ko || '';
+                                  useLibraryStore.getState().addGrammar({
+                                    id: Date.now().toString() + '_' + i,
+                                    ko: text,
+                                    zh: sentence,
+                                    level,
+                                    source: `AI 精听讲解 · ${file?.name || ''}`,
+                                    savedAt: Date.now(),
+                                  });
+                                }}>
+                                  <Star size={16} color={isCollected ? C.accent : C.text3} />
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+
+                      {/* Usage Examples */}
+                      {exp.examples?.length > 0 && (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <MessageCircle size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>使用案例</Text>
+                          </View>
+                          {exp.examples.map((ex: string, i: number) => (
+                            <Text key={i} style={[S.textSm, S.text2, { lineHeight: 22, paddingVertical: 2 }]}>
+                              {i + 1}. {typeof ex === 'string' ? ex : String(ex ?? '')}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* Usage */}
+                      {exp.usage ? (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <Volume2 size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>使用场景</Text>
+                          </View>
+                          <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.usage}</Text>
+                        </View>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Bottom controls */}
+          <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, paddingBottom: insets.bottom + 8, paddingHorizontal: 24 }]}>
+            {/* Speed selector */}
+            <View style={[S.row, S.justifyCenter, S.gap15, S.mb2]}>
+              {[0.5, 0.75, 1, 1.5, 2].map(s => (
+                <TouchableOpacity
+                  key={s}
+                  style={[
+                    { paddingHorizontal: 12, paddingVertical: 6 }, S.roundedFull,
+                    playerSpeed === s ? [S.bgAccent, S.borderAccent] : { borderWidth: 1, borderColor: C.border },
+                  ]}
+                  onPress={() => changeRate(s)}
+                >
+                  <Text style={[S.textXs, playerSpeed === s ? S.textWhite : S.text3]}>{s}×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Main controls */}
+            <View style={[S.row, S.itemsCenter, S.justifyCenter, S.gap5]}>
+              {/* Copy */}
+              <TouchableOpacity style={[S.center, { width: 44, height: 44 }]} onPress={echoCopy}>
+                {echoCopied ? <Copy size={20} color={C.green} /> : <Copy size={20} color={C.text2} />}
+              </TouchableOpacity>
+
+              {/* Skip back */}
+              <TouchableOpacity style={[{ width: 48, height: 48 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => echoJump(-1)} disabled={echoIdx <= 0}>
+                <SkipBack size={22} color={echoIdx <= 0 ? C.text3 : C.text} />
+              </TouchableOpacity>
+
+              {/* Play / Pause */}
+              <TouchableOpacity style={[{ width: 72, height: 72 }, S.roundedFull, S.bgAccent, S.center, { shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 }]} onPress={echoPauseResume}>
+                {echoPlaying ? <Pause size={32} color="#fff" fill="#fff" /> : <Play size={32} color="#fff" fill="#fff" />}
+              </TouchableOpacity>
+
+              {/* Skip forward */}
+              <TouchableOpacity style={[{ width: 48, height: 48 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => echoJump(1)} disabled={echoIdx >= items.length - 1}>
+                <SkipForward size={22} color={echoIdx >= items.length - 1 ? C.text3 : C.text} />
+              </TouchableOpacity>
+
+              {/* Explain */}
+              <TouchableOpacity style={[S.center, { width: 44, height: 44 }]} onPress={echoExplain}>
+                <BookOpen size={20} color={C.text2} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
+}
+
+function findTranscriptIndex(items: { time: string }[], posSec: number): number {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const [m, s] = items[i].time.split(':').map(Number);
+    if (m * 60 + s <= posSec) return i;
+  }
+  return 0;
 }

@@ -24,6 +24,7 @@ interface ListenStore {
   prevTranscript: () => void;
   toggleTranslation: () => void;
   setTranscript: (fileId: string, items: TranscriptItem[]) => void;
+  setExplain: (fileId: string, sentenceIdx: number, explain: NonNullable<TranscriptItem['explain']>) => void;
 }
 
 export const useListenStore = create<ListenStore>()(
@@ -66,6 +67,14 @@ export const useListenStore = create<ListenStore>()(
       toggleTranslation: () => set((s) => ({ showTranslation: !s.showTranslation })),
       setTranscript: (fileId, items) =>
         set((s) => ({ transcripts: { ...s.transcripts, [fileId]: items } })),
+      setExplain: (fileId, sentenceIdx, explain) =>
+        set((s) => {
+          const items = [...(s.transcripts[fileId] || [])];
+          if (items[sentenceIdx]) {
+            items[sentenceIdx] = { ...items[sentenceIdx], explain };
+          }
+          return { transcripts: { ...s.transcripts, [fileId]: items } };
+        }),
     }),
     {
       name: 'listen-store',

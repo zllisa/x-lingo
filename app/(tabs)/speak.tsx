@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { ClipboardList, Theater } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -6,7 +7,6 @@ import { useSpeakStore } from '../../stores/useSpeakStore';
 import { MOCK_TOPICS } from '../../constants/mockData';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
-
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SpeakScreen() {
@@ -19,10 +19,16 @@ export default function SpeakScreen() {
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
       <View style={[S.row, S.gap2, S.mb4]}>
         <TouchableOpacity style={[S.flex1, S.py25, S.roundedCard, S.itemsCenter, mode === 'topic' ? S.bgAccent : [S.bgSurface, S.border]]} onPress={() => setMode('topic')}>
-          <Text style={[S.textXs, S.semibold, mode === 'topic' ? S.textWhite : S.text2]}>📋 话题对话</Text>
+          <View style={[S.row, S.itemsCenter, S.gap1]}>
+            <ClipboardList size={12} color={mode === 'topic' ? '#fff' : C.text2} />
+            <Text style={[S.textXs, S.semibold, mode === 'topic' ? S.textWhite : S.text2]}>话题对话</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity style={[S.flex1, S.py25, S.roundedCard, S.itemsCenter, mode === 'free' ? S.bgAccent : [S.bgSurface, S.border]]} onPress={() => setMode('free')}>
-          <Text style={[S.textXs, S.semibold, mode === 'free' ? S.textWhite : S.text2]}>🎭 自由对话</Text>
+          <View style={[S.row, S.itemsCenter, S.gap1]}>
+            <Theater size={12} color={mode === 'free' ? '#fff' : C.text2} />
+            <Text style={[S.textXs, S.semibold, mode === 'free' ? S.textWhite : S.text2]}>自由对话</Text>
+          </View>
         </TouchableOpacity>
       </View>
       {mode === 'topic' ? (
@@ -43,7 +49,7 @@ export default function SpeakScreen() {
         />
       ) : (
         <View style={[S.flex1, S.center, S.pb20]}>
-          <Text style={[S.text6xl, S.mb3]}>🎭</Text>
+          <Theater size={60} color={C.accent} style={S.mb3} />
           <Text style={[S.textLg, S.bold, S.text, S.mb2]}>自由对话</Text>
           <Text style={[S.textSm, S.text2, S.textCenter, S.leading6, S.mb4]}>无固定场景，支持闲聊、表达求助、日常问答。{'\n'}AI 陪练全程纯韩语回复。</Text>
           <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 32, paddingVertical: 12 }]} onPress={() => { useSpeakStore.getState().startFreeConversation(); navigation.navigate('Chat'); }}>

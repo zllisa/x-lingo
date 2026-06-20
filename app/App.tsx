@@ -20,11 +20,10 @@ import LoginScreen from './auth/login';
 export type RootStackParamList = {
   Tabs: undefined;
   Chat: undefined;
-
-  WordDetail: { word: string; source: string };
-  SentenceDetail: { text: string; source: string };
   Player: undefined;
   Calendar: undefined;
+  WordDetail: { word: string; source: string };
+  SentenceDetail: { text: string; source: string };
   Login: undefined;
 };
 
@@ -66,11 +65,10 @@ export default function App() {
             <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={isLoggedIn ? 'Tabs' : 'Login'}>
               <Stack.Screen name="Tabs" component={TabLayout} />
               <Stack.Screen name="Chat" component={ChatScreen} />
-
-              <Stack.Screen name="WordDetail" component={WordDetailModal} options={{ presentation: 'transparentModal' }} />
-              <Stack.Screen name="SentenceDetail" component={SentenceDetailModal} options={{ presentation: 'transparentModal' }} />
               <Stack.Screen name="Player" component={PlayerScreen} />
               <Stack.Screen name="Calendar" component={CalendarScreen} />
+              <Stack.Screen name="WordDetail" component={WordDetailModal} options={{ presentation: 'transparentModal' }} />
+              <Stack.Screen name="SentenceDetail" component={SentenceDetailModal} options={{ presentation: 'transparentModal' }} />
               <Stack.Screen name="Login" component={LoginScreen} />
             </Stack.Navigator>
           </NavigationContainer>

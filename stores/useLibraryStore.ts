@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LibTab, WordSection, Word, SavedSentence } from '../types';
+import { LibTab, WordSection, Word, SavedSentence, GrammarPoint } from '../types';
 import { useAuthStore } from './useAuthStore';
 import { syncVocabularyToCloud, loadVocabularyFromCloud, syncSentencesToCloud, loadSentencesFromCloud } from '../lib/sync';
 
 interface LibraryStore {
   words: Word[];
   sentences: SavedSentence[];
+  grammarPoints: GrammarPoint[];
   wordSectionsCollapsed: Record<string, boolean>;
   sentenceSectionsCollapsed: Record<string, boolean>;
   currentTab: LibTab;
@@ -17,6 +18,7 @@ interface LibraryStore {
 
   addWord: (w: Word) => void;
   addSentence: (s: SavedSentence) => void;
+  addGrammar: (g: GrammarPoint) => void;
   toggleMastered: (wordId: string) => void;
   setTab: (tab: LibTab) => void;
   setFilter: (f: string) => void;
@@ -33,6 +35,7 @@ export const useLibraryStore = create<LibraryStore>()(
     (set) => ({
       words: [],
       sentences: [],
+      grammarPoints: [],
       wordSectionsCollapsed: {},
       sentenceSectionsCollapsed: {},
       currentTab: 'words',
@@ -51,6 +54,10 @@ export const useLibraryStore = create<LibraryStore>()(
         const userId = useAuthStore.getState().userId;
         if (userId) syncSentencesToCloud(userId, sentences);
         return { sentences };
+      }),
+      addGrammar: (g) => set((s) => {
+        const grammarPoints = [g, ...s.grammarPoints.filter((x) => x.ko !== g.ko)];
+        return { grammarPoints };
       }),
       toggleMastered: (id) =>
         set((s) => ({
@@ -90,12 +97,23 @@ export const useLibraryStore = create<LibraryStore>()(
     {
       name: 'library-store',
       version: 2,
-      migrate: () => ({ words: [], sentences: [], wordSectionsCollapsed: {}, sentenceSectionsCollapsed: {}, currentTab: 'words', currentFilter: 'all', currentSort: 'newest', searchQuery: '' }),
+      migrate: (_persisted: any) => {
+        if (!_persisted) return { words: [], sentences: [], grammarPoints: [], wordSectionsCollapsed: {}, sentenceSectionsCollapsed: {}, currentTab: 'words', currentFilter: 'all', currentSort: 'newest', searchQuery: '' };
+        return { ..._persisted, grammarPoints: _persisted.grammarPoints || [] };
+      },
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },
         setItem: (k, v) => AsyncStorage.setItem(k, JSON.stringify(v)),
         removeItem: (k) => AsyncStorage.removeItem(k),
       },
+      partialize: (state) => ({
+        words: state.words,
+        sentences: state.sentences,
+        grammarPoints: state.grammarPoints,
+        wordSectionsCollapsed: state.wordSectionsCollapsed,
+        sentenceSectionsCollapsed: state.sentenceSectionsCollapsed,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any),
     }
   )
 );

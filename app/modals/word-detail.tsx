@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Animated } from 'react
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useRef, useEffect, useState } from 'react';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { Volume2 } from 'lucide-react-native';
+import { CheckCircle2, FileText, Lightbulb, MapPin, Search, Star, Volume2 } from 'lucide-react-native';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useWordLookup } from '../../hooks/useWordLookup';
@@ -93,7 +93,10 @@ export default function WordDetailModal() {
       {/* Absorb taps on the card itself so only backdrop taps dismiss the sheet */}
       <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
-        <Text style={[S.textBase, S.bold, S.text, S.mb1]}>🔍 单词详情</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb1]}>
+          <Search size={16} color={C.text} />
+          <Text style={[S.textBase, S.bold, S.text]}>单词详情</Text>
+        </View>
         <Text style={[S.textXs, S.text3, S.mb3]}>点击单词查看释义</Text>
 
         <Text style={[{ fontSize: 22 }, S.bold, S.text]}>
@@ -110,16 +113,28 @@ export default function WordDetailModal() {
                 <Text style={[S.textXs, S.textAccent, S.semibold]}>{data?.pos || (word && /^[a-zA-Z]+$/.test(word) ? '외래어 (外来词)' : '명사 (名词)')}</Text>
               </View>
             </View>
-            <Text style={[S.textBase, S.text, S.mt3]}>💡 {data?.meanings?.join('；') || '释义加载中...'}</Text>
-            <Text style={[S.textSm, S.text2, S.mt2]}>📝 {data?.example || '例句加载中...'}</Text>
+            <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mt3]}>
+              <Lightbulb size={16} color={C.text} />
+              <Text style={[S.textBase, S.text]}>{data?.meanings?.join('；') || '释义加载中...'}</Text>
+            </View>
+            <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mt2]}>
+              <FileText size={14} color={C.text2} />
+              <Text style={[S.textSm, S.text2]}>{data?.example || '例句加载中...'}</Text>
+            </View>
           </>
         )}
 
-        <Text style={[S.textXs, S.text3, S.mt2]}>📌 来源：{source || 'AI 口语对话'}</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mt2]}>
+          <MapPin size={12} color={C.text3} />
+          <Text style={[S.textXs, S.text3]}>来源：{source || 'AI 口语对话'}</Text>
+        </View>
 
         <View style={[S.row, S.gap2, S.mt5]}>
           <TouchableOpacity style={[S.flex1, S.py3, S.roundedFull, alreadySaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter]} onPress={handleSave}>
-            <Text style={[S.textSm, S.textWhite, S.semibold]}>{alreadySaved ? '✅ 已在学习库' : '⭐ 收藏到学习库'}</Text>
+            <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+              {alreadySaved ? <CheckCircle2 size={14} color="#fff" /> : <Star size={14} color="#fff" />}
+              <Text style={[S.textSm, S.textWhite, S.semibold]}>{alreadySaved ? '已在学习库' : '收藏到学习库'}</Text>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity style={[{ paddingHorizontal: 16 }, S.py3, S.roundedFull, S.border, S.flexRow, S.gap1, S.itemsCenter]} onPress={playPronunciation} disabled={playing} activeOpacity={0.6}>
             <Animated.View style={{ transform: [{ scale: pulse }] }}>

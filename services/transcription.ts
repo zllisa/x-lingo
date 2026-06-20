@@ -1,7 +1,9 @@
-import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
+import { whisperSTTWithTimestamps, type WhisperSegment } from './whisperSTT';
+// Azure STT 保留备用 — import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
 import { deepSeekTranslate, deepSeekRomanize } from './deepseek';
 import { qiniuExtractAudio, qiniuEnabled } from './qiniu';
 import { extractAudio } from './AudioExtractor';
+import { stat } from '@dr.pogodin/react-native-fs';
 import type { TranscriptItem } from '../types';
 
 function formatTime(seconds: number): string {
@@ -16,12 +18,35 @@ function isVideo(uri: string): boolean {
 }
 
 /**
+ * Check whether the video file is small enough to send directly to
+ * Groq Whisper (which demuxes audio from video containers natively).
+ * Only works for file:// URIs — ph:// / assets-library:// URIs
+ * cannot be stat'd and must go through Qiniu extraction.
+ */
+async function canSendVideoDirect(fileUri: string): Promise<boolean> {
+  if (!fileUri.startsWith('file://')) return false;
+  try {
+    const path = decodeURIComponent(fileUri.replace(/^file:\/\//, ''));
+    const info = await stat(path);
+    const sizeMB = Number(info.size) / (1024 * 1024);
+    // Groq free tier limit is 25 MB; stay safely below it
+    console.log('[Transcription] Video file size:', sizeMB.toFixed(1), 'MB');
+    return sizeMB < 22;
+  } catch (e: any) {
+    console.log('[Transcription] Cannot stat video file:', e?.message);
+    return false;
+  }
+}
+
+/**
  * 精听 transcription pipeline.
  *
- * Video files: prefer Qiniu cloud transcoding (avthumb/mp3) if configured.
- * Falls back to native AVAssetExportSession on iOS.
+ * Video files: send directly to Groq Whisper when file is small enough
+ * (Groq demuxes audio from video natively — avoids potential Qiniu avthumb
+ * audio extraction issues). Falls back to Qiniu cloud transcoding (mp3)
+ * for large files, then native AVAssetExportSession on iOS.
  *
- * Audio files: sent directly to Azure STT.
+ * Audio files: sent directly to Groq Whisper.
  */
 export async function transcribeFile(
   fileUri: string,
@@ -30,7 +55,11 @@ export async function transcribeFile(
   let audioUri = fileUri;
 
   if (isVideo(fileUri)) {
-    if (qiniuEnabled()) {
+    if (await canSendVideoDirect(fileUri)) {
+      // Send video directly — Groq Whisper handles audio demuxing server-side
+      onProgress?.('正在识别语音 (Groq Whisper 直接处理视频)...');
+      console.log('[Transcription] Sending video directly to Groq Whisper:', fileUri);
+    } else if (qiniuEnabled()) {
       onProgress?.('正在上传至七牛云并提取音频...');
       audioUri = await qiniuExtractAudio(fileUri);
     } else {
@@ -39,31 +68,39 @@ export async function transcribeFile(
     }
   }
 
-  onProgress?.('正在识别语音 (Azure STT)...');
-  const segments: AzureSTTSegment[] = await azureSTTWithTimestamps(audioUri);
+  // ── STT: Groq Whisper verbose_json → 词级时间戳分句 ──
+  if (audioUri === fileUri && isVideo(fileUri)) {
+    // Already showing "直接处理视频" progress
+  } else {
+    onProgress?.('正在识别语音 (Groq Whisper)...');
+  }
+  console.log('[Transcription] STT audioUri:', audioUri);
+  const rawSegments = await whisperSTTWithTimestamps(audioUri);
 
-  if (!segments.length) {
+  if (!rawSegments.length) {
     throw new Error('没有识别到任何语音内容');
   }
 
-  const merged: AzureSTTSegment[] = [];
-  for (const seg of segments) {
-    const last = merged[merged.length - 1];
-    if (last && seg.start - last.end < 1.5 && (seg.end - last.start) < 15) {
-      last.end = seg.end;
-      last.text = last.text + ' ' + seg.text;
-    } else {
-      merged.push({ ...seg });
-    }
-  }
+  // WhisperSegment → unified segment shape
+  const segments = rawSegments.map((s: WhisperSegment) => ({
+    start: s.start,
+    end: s.end,
+    text: s.text,
+  }));
 
-  onProgress?.(`已识别 ${merged.length} 个句子，正在翻译和生成罗马字...`);
+  console.log('[Transcription] Whisper returned', segments.length, 'segments:');
+  segments.forEach((s, i) => console.log(`[Transcription]   [${i}] ${s.start.toFixed(1)}s-${s.end.toFixed(1)}s "${s.text}"`));
+
+  // DeepSeek already provides properly split sentences — no merging needed.
+  // Proportional timestamps have contiguous boundaries, so any merge logic
+  // would incorrectly combine correctly-split sentences.
+  onProgress?.(`已识别 ${segments.length} 个句子，正在翻译和生成罗马字...`);
 
   const BATCH_SIZE = 5;
   const results: TranscriptItem[] = [];
 
-  for (let i = 0; i < merged.length; i += BATCH_SIZE) {
-    const batch = merged.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < segments.length; i += BATCH_SIZE) {
+    const batch = segments.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map(async (seg): Promise<TranscriptItem> => {
         const [zh, roma] = await Promise.all([
@@ -80,7 +117,7 @@ export async function transcribeFile(
       }),
     );
     results.push(...batchResults);
-    onProgress?.(`进度: ${Math.min(i + BATCH_SIZE, merged.length)} / ${merged.length}`);
+    onProgress?.(`进度: ${Math.min(i + BATCH_SIZE, segments.length)} / ${segments.length}`);
   }
 
   return results;

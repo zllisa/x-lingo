@@ -57,20 +57,15 @@ export default function ChatScreen() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []));
 
-  // Send first AI question
-  useEffect(() => {
-    if (chatHistory.length === 0 && topic) {
-      addMessage({ id: Date.now().toString(), type: 'ai', text: topic.questions[0], timestamp: Date.now() });
-    }
-  }, []);
-
   // Speak the given Korean text via Azure TTS (used for auto-play and manual replay).
   // When `messageId` is provided the speaker icon for that message animates and
   // duplicate clicks are blocked until playback finishes.
   const playText = useCallback(async (text: string, messageId?: string) => {
     try {
       const { azureTTS } = await import('../../services/azureTTS');
-      const speed = useProfileStore.getState().settings?.playbackSpeed || 1;
+      const rawStore = useProfileStore.getState().settings?.playbackSpeed;
+      const speed = rawStore ?? 0.65;
+      console.log('[Chat] TTS speed — store playbackSpeed:', rawStore, '→ effective speed:', speed);
       const localPath = await azureTTS(text, speed);
       const playUri = localPath.startsWith('file://') ? localPath : 'file://' + localPath;
       if (useSpeakStore.getState().voiceState !== 'ready') return; // don't play over a recording
@@ -279,9 +274,21 @@ export default function ChatScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {voiceState !== 'ready' && (
             <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingVertical: 24, paddingBottom: insets.bottom + 24 }]}>
-              <Text style={[S.textXs, S.text3, S.textCenter, S.mb3]}>
-                {voiceState === 'recording' ? '🔴 正在聆听' : voiceState === 'paused' ? '⏸ 已暂停' : '已识别 · 点「编辑」可修改，或直接发送'}
-              </Text>
+              <View style={[S.flexRow, S.justifyCenter, S.itemsCenter, S.gap1, S.mb3]}>
+                {voiceState === 'recording' ? (
+                  <>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#e17055' }} />
+                    <Text style={[S.textXs, S.text3]}>正在聆听</Text>
+                  </>
+                ) : voiceState === 'paused' ? (
+                  <>
+                    <Pause size={12} color={C.text3} />
+                    <Text style={[S.textXs, S.text3]}>已暂停</Text>
+                  </>
+                ) : (
+                  <Text style={[S.textXs, S.text3]}>已识别 · 点「编辑」可修改，或直接发送</Text>
+                )}
+              </View>
               {voiceState === 'reviewing' ? (
                 <View>
                   {/* No autoFocus: the keyboard stays down by default. Tapping the
@@ -308,17 +315,27 @@ export default function ChatScreen() {
                   </View>
                 </View>
               ) : (
-                <View style={[S.row, S.justifyCenter, S.gap5, S.itemsCenter]}>
-                  <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: C.red }, S.center]} onPress={handleCancel}><X size={22} color={C.red} /></TouchableOpacity>
+                <View style={[S.row, S.justifyCenter, S.gap3, S.itemsCenter]}>
+                  <TouchableOpacity style={[{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: C.border }, S.center]} onPress={handleCancel}>
+                    <X size={20} color={C.text2} />
+                  </TouchableOpacity>
                   {voiceState === 'recording' ? (
                     <>
-                      <TouchableOpacity style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.red }, S.center]} onPress={pauseRecording}><Pause size={26} color="#fff" fill="#fff" /></TouchableOpacity>
-                      <TouchableOpacity style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.red }, S.center]} onPress={stopAndTranscribe}><Square size={24} color="#fff" fill="#fff" /></TouchableOpacity>
+                      <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.accent }, S.center]} onPress={pauseRecording}>
+                        <Pause size={22} color="#fff" fill="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#7c5cfc' }, S.center]} onPress={stopAndTranscribe}>
+                        <Square size={20} color="#fff" fill="#fff" />
+                      </TouchableOpacity>
                     </>
                   ) : (
                     <>
-                      <TouchableOpacity style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.orange }, S.center]} onPress={resumeRecording}><Play size={26} color="#fff" fill="#fff" /></TouchableOpacity>
-                      <TouchableOpacity style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.red }, S.center]} onPress={stopAndTranscribe}><Square size={24} color="#fff" fill="#fff" /></TouchableOpacity>
+                      <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.accent }, S.center]} onPress={resumeRecording}>
+                        <Play size={22} color="#fff" fill="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#7c5cfc' }, S.center]} onPress={stopAndTranscribe}>
+                        <Square size={20} color="#fff" fill="#fff" />
+                      </TouchableOpacity>
                     </>
                   )}
                 </View>
@@ -327,7 +344,7 @@ export default function ChatScreen() {
           )}
 
           {voiceState === 'ready' && (
-            <View style={[S.itemsCenter, { paddingVertical: 12, paddingBottom: insets.bottom + 12 }, S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border }]}>
+            <View style={[S.itemsCenter, { paddingVertical: 24, paddingBottom: insets.bottom + 24 }, S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border }]}>
               <TouchableOpacity style={[S.w14, S.roundedFull, S.bgAccent, S.center, S.shadow]} onPress={startRecording}>
                 <Mic size={26} color="#fff" />
               </TouchableOpacity>
@@ -384,7 +401,10 @@ function AiMessage({ item, renderText, onSentencePress, onPlay, isPlaying }: AiM
           <Text style={[S.textSm, { lineHeight: 24 }]}>{renderText(item.text, false)}</Text>
         </TouchableOpacity>
       ) : (
-        <Text style={[S.textSm, S.text3, { lineHeight: 24, fontStyle: 'italic' }]}>🙈 原文已隐藏</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+          <EyeOff size={14} color={C.text3} />
+          <Text style={[S.textSm, S.text3, { lineHeight: 24, fontStyle: 'italic' }]}>原文已隐藏</Text>
+        </View>
       )}
 
       {translation ? (

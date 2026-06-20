@@ -40,11 +40,25 @@ export interface TranscriptItem {
   roma: string;
   zh: string;
   active: boolean;
+  explain?: ExplainData;
 }
 
 // === Library Module ===
-export type LibTab = 'words' | 'sentences';
+export type LibTab = 'words' | 'sentences' | 'grammar';
 export type WordSection = 'speak' | 'listen' | 'other';
+export type GrammarLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export interface GrammarExplainItem {
+  text: string;
+  level: GrammarLevel;
+}
+
+export interface ExplainData {
+  words: { word: string; meaning: string }[];
+  grammar: GrammarExplainItem[];
+  examples: string[];
+  usage: string;
+}
 
 export interface Word {
   id: string;
@@ -68,6 +82,15 @@ export interface SavedSentence {
   zh: string;
   source: string;
   section: WordSection;
+  savedAt: number;
+}
+
+export interface GrammarPoint {
+  id: string;
+  ko: string;           // 语法解释文本（如 "-을 거예요: 表示将来计划"）
+  zh: string;           // 来源句子（如 "주말에 뭐 할 거예요?"）
+  level: GrammarLevel;  // 初级/中级/高级
+  source: string;       // 来源（如 "AI 精听讲解 · coffee_menu"）
   savedAt: number;
 }
 

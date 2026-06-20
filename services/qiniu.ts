@@ -80,9 +80,8 @@ export async function uploadToQiniu(fileUri: string): Promise<string> {
 async function triggerTranscode(key: string): Promise<string> {
   const body = new URLSearchParams({
     bucket: QINIU_BUCKET, key,
-    // WAV is Azure STT's recommended format — no codec compatibility issues,
-    // no ID3/metadata headers, just raw PCM that Azure decodes natively.
-    // 16kHz mono 16-bit PCM is the optimal setting for speech recognition.
+    // WAV PCM 16-bit LE 16kHz mono — optimal for speech recognition.
+    // No ID3/metadata headers, no compression artifacts.
     fops: 'avthumb/wav/acodec/pcm_s16le/ar/16000/ac/1',
   }).toString();
 
@@ -131,10 +130,10 @@ async function waitForTranscode(persistentId: string): Promise<string> {
 /**
  * Extract audio from video via Qiniu:
  * 1. Upload video
- * 2. Trigger avthumb/mp3/ab/128k persistent processing
+ * 2. Trigger avthumb/wav persistent processing (PCM 16kHz mono)
  * 3. Poll until complete
- * 4. Download result mp3 via RNFS.downloadFile (reliable native downloader)
- * Returns file:// URI to the downloaded mp3.
+ * 4. Download result wav via RNFS.downloadFile (reliable native downloader)
+ * Returns file:// URI to the downloaded wav.
  */
 export async function qiniuExtractAudio(videoUri: string): Promise<string> {
   // 1. Upload

@@ -3,10 +3,12 @@ import { AZURE_TTS_KEY, AZURE_TTS_REGION } from '../constants/api';
 const ENDPOINT = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
 function buildSSML(text: string, speed: number = 1): string {
-  const rate = speed <= 0.5 ? 'slow' : speed >= 1.5 ? 'fast' : 'medium';
+  // Percentage rate: 0.5 → "50%", 1.5 → "150%", 2 → "200%"
+  const pct = Math.round(speed * 100);
+  console.log('[Azure TTS] speed param:', speed, '→ SSML rate:', `${pct}%`);
   return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ko-KR">
     <voice name="ko-KR-SunHiNeural">
-      <prosody rate="${rate}">${text}</prosody>
+      <prosody rate="${pct}%">${text}</prosody>
     </voice>
   </speak>`;
 }

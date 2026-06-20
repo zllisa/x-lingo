@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useState, useMemo } from 'react';
+import { Calendar, ClipboardList, Flame } from 'lucide-react-native';
 import { useProfileStore } from '../stores/useProfileStore';
 import { S, C } from '../utils/theme';
 
@@ -50,7 +51,10 @@ export default function CalendarScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={[S.textSm, S.textAccent, S.semibold]}>← 返回</Text>
         </TouchableOpacity>
-        <Text style={[S.textBase, S.bold, S.text]}>📅 打卡日历</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+          <Calendar size={16} color={C.text} />
+          <Text style={[S.textBase, S.bold, S.text]}>打卡日历</Text>
+        </View>
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
@@ -69,7 +73,11 @@ export default function CalendarScreen() {
                 const checked = checkinDates.includes(date);
                 return (
                   <View key={date} style={[S.flex1, S.aspect1, S.roundedFull, S.center, { margin: 2 }, checked ? { backgroundColor: 'rgba(0,184,148,0.2)' } : undefined, isToday && !checked ? { borderWidth: 2, borderColor: C.accent } : undefined]}>
-                    <Text style={[{ fontSize: 12 }, !isCurrentMonth ? S.text3 : checked ? [S.textGreen, S.bold] : S.text]}>{checked ? '🔥' : day}</Text>
+                    {checked ? (
+                      <Flame size={16} color={C.green} />
+                    ) : (
+                      <Text style={[{ fontSize: 12 }, !isCurrentMonth ? S.text3 : S.text]}>{day}</Text>
+                    )}
                   </View>
                 );
               })}
@@ -77,13 +85,16 @@ export default function CalendarScreen() {
           ))}
         </View>
 
-        <Text style={[S.textSm, S.semibold, S.text, S.mt5, S.mb2, S.px4]}>📋 全部打卡记录 ({checkinDates.length} 次)</Text>
+        <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mt5, S.mb2, S.px4]}>
+          <ClipboardList size={14} color={C.text} />
+          <Text style={[S.textSm, S.semibold, S.text]}>全部打卡记录 ({checkinDates.length} 次)</Text>
+        </View>
         {sortedDates.length === 0 ? (
           <View style={[S.itemsCenter, { paddingVertical: 40 }]}><Text style={S.text3}>暂无打卡记录</Text></View>
         ) : (
           sortedDates.map((date, index) => (
             <View key={date} style={[S.flexRow, S.itemsCenter, S.py2, S.px4, S.borderBottom]}>
-              <Text style={[S.textXl, S.mr3]}>🔥</Text>
+              <Flame size={20} color={C.green} style={{ marginRight: 12 }} />
               <View style={S.flex1}>
                 <Text style={[S.textSm, S.text, S.semibold]}>{date} ({['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]})</Text>
                 <Text style={[S.textXs, S.text3]}>第 {sortedDates.length - index} 次打卡</Text>

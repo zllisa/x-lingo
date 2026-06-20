@@ -1,0 +1,1 @@
+- [Always ask before coding](.claude/memory/always-ask-before-coding.md) — 写代码前必须先给方案等用户批准
