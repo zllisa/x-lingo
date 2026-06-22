@@ -3,9 +3,25 @@
 // ============================================================
 
 // === Speaking Module ===
-export type SpeakMode = 'topic' | 'free';
+export type SpeakMode = 'topic' | 'scenario' | 'free';
 export type VoiceState = 'ready' | 'recording' | 'paused' | 'reviewing';
 export type Scenario = 'A' | 'B' | 'C';
+
+export interface ScenarioTask {
+  id: string;
+  title: string;    // Korean
+  titleCN: string;  // Chinese
+  hint?: string;    // optional example phrase
+}
+
+export interface TopicScenario {
+  title: string;    // scenario name in Chinese, e.g. 便利店买东西
+  role: string;     // AI role in Korean, e.g. 편의점 점원
+  roleCN: string;   // Chinese
+  intro: string;    // Chinese intro shown on the task screen
+  opening: string;  // Korean greeting the AI says first
+  tasks: ScenarioTask[];
+}
 
 export interface Topic {
   id: string;
@@ -24,6 +40,18 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface Conversation {
+  id: string;
+  topicId: string;       // topic id or 'free' or 'scenario'
+  title: string;         // display title (topic name / scenario title / 自由对话)
+  icon: string;
+  messages: ChatMessage[];
+  scenario?: TopicScenario;     // present for scenario conversations
+  completedTaskIds?: string[];  // task progress for scenario conversations
+  createdAt: number;
+  updatedAt: number;
+}
+
 // === Listening Module ===
 export interface AudioFile {
   id: string;
@@ -32,6 +60,9 @@ export interface AudioFile {
   date: string;
   icon: string;
   uri?: string;
+  // Durable Qiniu URL of the extracted audio. Used to re-download and play
+  // when the local cache file has been purged by iOS.
+  remoteAudioUrl?: string;
 }
 
 export interface TranscriptItem {
@@ -101,7 +132,12 @@ export interface UserProfile {
   goal: string;
 }
 
+export type SpeakLevel = 'beginner' | 'intermediate' | 'advanced';
+
 export interface AppSettings {
   romaVisible: boolean;
   playbackSpeed: number;
+  speakLevel: SpeakLevel;
+  levelOnboarded?: boolean;      // has the user picked a level on first launch?
+  levelUpDismissed?: SpeakLevel; // a suggested next-level the user dismissed
 }

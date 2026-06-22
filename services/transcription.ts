@@ -1,6 +1,6 @@
 import { whisperSTTWithTimestamps, type WhisperSegment } from './whisperSTT';
 // Azure STT 保留备用 — import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
-import { deepSeekTranslate, deepSeekRomanize } from './deepseek';
+import { deepSeekTranslate, deepSeekTranslateBatch } from './deepseek';
 import { qiniuExtractAudio, qiniuEnabled } from './qiniu';
 import { extractAudio } from './AudioExtractor';
 import { stat } from '@dr.pogodin/react-native-fs';
@@ -51,8 +51,9 @@ async function canSendVideoDirect(fileUri: string): Promise<boolean> {
 export async function transcribeFile(
   fileUri: string,
   onProgress?: (message: string) => void,
-): Promise<TranscriptItem[]> {
+): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string }> {
   let audioUri = fileUri;
+  let remoteAudioUrl: string | undefined;
 
   if (isVideo(fileUri)) {
     if (await canSendVideoDirect(fileUri)) {
@@ -61,7 +62,9 @@ export async function transcribeFile(
       console.log('[Transcription] Sending video directly to Groq Whisper:', fileUri);
     } else if (qiniuEnabled()) {
       onProgress?.('正在上传至七牛云并提取音频...');
-      audioUri = await qiniuExtractAudio(fileUri);
+      const q = await qiniuExtractAudio(fileUri);
+      audioUri = q.uri;
+      remoteAudioUrl = q.remoteUrl;
     } else {
       onProgress?.('正在从视频中提取音频轨道 (iOS 本地)...');
       audioUri = await extractAudio(fileUri);
@@ -94,31 +97,39 @@ export async function transcribeFile(
   // DeepSeek already provides properly split sentences — no merging needed.
   // Proportional timestamps have contiguous boundaries, so any merge logic
   // would incorrectly combine correctly-split sentences.
-  onProgress?.(`已识别 ${segments.length} 个句子，正在翻译和生成罗马字...`);
+  onProgress?.(`已识别 ${segments.length} 个句子，正在翻译...`);
 
-  const BATCH_SIZE = 5;
+  // Translate in chunks — one DeepSeek call per chunk instead of per sentence.
+  // Chunk (rather than one giant call) keeps each request under the output
+  // token limit and bounds the blast radius if a single call fails.
+  const BATCH_SIZE = 25;
   const results: TranscriptItem[] = [];
 
   for (let i = 0; i < segments.length; i += BATCH_SIZE) {
     const batch = segments.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (seg): Promise<TranscriptItem> => {
-        const [zh, roma] = await Promise.all([
-          deepSeekTranslate(seg.text).catch(() => '(翻译失败)'),
-          deepSeekRomanize(seg.text).catch(() => ''),
-        ]);
-        return {
-          time: formatTime(seg.start),
-          ko: seg.text,
-          roma,
-          zh,
-          active: false,
-        };
-      }),
-    );
-    results.push(...batchResults);
+
+    let translations: string[];
+    try {
+      translations = await deepSeekTranslateBatch(batch.map(s => s.text));
+    } catch (e: any) {
+      // Fallback: translate sentence-by-sentence so we never drop a whole chunk
+      console.warn('[Transcription] batch translate failed, falling back per-sentence:', e?.message);
+      translations = await Promise.all(
+        batch.map(s => deepSeekTranslate(s.text).catch(() => '(翻译失败)')),
+      );
+    }
+
+    batch.forEach((seg, j) => {
+      results.push({
+        time: formatTime(seg.start),
+        ko: seg.text,
+        roma: '', // romanization is computed locally in the UI (utils/romanize)
+        zh: translations[j] || '(翻译失败)',
+        active: false,
+      });
+    });
     onProgress?.(`进度: ${Math.min(i + BATCH_SIZE, segments.length)} / ${segments.length}`);
   }
 
-  return results;
+  return { items: results, remoteAudioUrl };
 }

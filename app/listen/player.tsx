@@ -29,6 +29,8 @@ import {
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useListenStore } from '../../stores/useListenStore';
 import { useProfileStore } from '../../stores/useProfileStore';
+import { romanize, romanizeWords } from '../../utils/romanize';
+import { useWordLookup } from '../../hooks/useWordLookup';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
 
@@ -55,6 +57,10 @@ export default function PlayerScreen() {
 
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeMsg, setTranscribeMsg] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  // Resolved playable file:// uri for the current file (may be a re-download
+  // from Qiniu if the local cache was purged). Reset when the file changes.
+  const playableUriRef = useRef<string | null>(null);
 
   const [durationMs, setDurationMs] = useState(0);
   const [currentMs, setCurrentMs] = useState(0);
@@ -71,6 +77,14 @@ export default function PlayerScreen() {
   const [echoCopied, setEchoCopied] = useState(false);
   const echoIdxRef = useRef(0);
   const grammarPoints = useLibraryStore(s => s.grammarPoints);
+
+  // Word lookup — shown as a nested sheet INSIDE the echo modal so it doesn't
+  // dismiss the RN Modal (navigating to the WordDetail screen used to close it).
+  const libWords = useLibraryStore(s => s.words);
+  const addWord = useLibraryStore(s => s.addWord);
+  const [echoWord, setEchoWord] = useState<string | null>(null);
+  const echoWordLookup = useWordLookup(echoWord || '', !!echoWord);
+  const echoWordSaved = !!echoWord && libWords.some(w => w.ko === echoWord);
 
   // Explain — persisted in store alongside transcript, survives app restart
   const [showExplain, setShowExplain] = useState(false);
@@ -146,13 +160,45 @@ export default function PlayerScreen() {
     setTranscribeMsg('正在准备识别...');
     try {
       const result = await transcribeFile(file.uri, (msg) => setTranscribeMsg(msg));
-      useListenStore.getState().setTranscript(activeFileId, result);
+      useListenStore.getState().setTranscript(activeFileId, result.items);
+      if (result.remoteAudioUrl) {
+        useListenStore.getState().setRemoteAudioUrl(activeFileId, result.remoteAudioUrl);
+      }
     } catch (e: any) {
       console.error('STT error:', e?.message, e);
       Alert.alert('识别失败', e?.message || '请确认音频包含韩语内容，且网络连接正常');
     } finally {
       setTranscribing(false);
       setTranscribeMsg('');
+    }
+  };
+
+  // Reset the resolved playable uri when switching files
+  useEffect(() => { playableUriRef.current = null; }, [activeFileId]);
+
+  // ── Resolve a playable file:// uri, re-downloading from Qiniu if the local
+  //    cache file has been purged by iOS. Caches the result for the session. ──
+  const loadMain = async () => {
+    if (!file?.uri) throw new Error('no file');
+    const doLoad = (uri: string) => load(MAIN_ID, uri, rateRef.current, loopRef.current);
+
+    if (playableUriRef.current) { await doLoad(playableUriRef.current); return; }
+
+    try {
+      await doLoad(file.uri);
+      playableUriRef.current = file.uri;
+    } catch (e) {
+      // Local file gone — fall back to the durable Qiniu copy if we have one
+      if (!file.remoteAudioUrl) throw e;
+      setRestoring(true);
+      try {
+        const { downloadQiniuAudio } = await import('../../services/qiniu');
+        const local = await downloadQiniuAudio(file.remoteAudioUrl);
+        await doLoad(local);
+        playableUriRef.current = local;
+      } finally {
+        setRestoring(false);
+      }
     }
   };
 
@@ -165,10 +211,10 @@ export default function PlayerScreen() {
         setPlaying(false);
       } else {
         try {
-          await load(MAIN_ID, file.uri, rateRef.current, loopRef.current);
+          await loadMain();
         } catch (e: any) {
           console.warn('[Player] load failed:', file.uri, e?.message);
-          // File may have been cleaned by iOS — show a clear prompt
+          // File may have been cleaned by iOS and no remote copy available
           Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
           return;
         }
@@ -183,7 +229,7 @@ export default function PlayerScreen() {
     setProgress(durationMs > 0 ? (ms / durationMs) * 100 : 0);
     try {
       if (!file?.uri) return;
-      try { await load(MAIN_ID, file.uri, rateRef.current, loopRef.current); } catch (e: any) { console.warn('[Player] seekTo load failed:', file.uri, e?.message); return; }
+      try { await loadMain(); } catch (e: any) { console.warn('[Player] seekTo load failed:', file.uri, e?.message); return; }
       await seek(MAIN_ID, ms);
     } catch {
       console.warn('[Player] seekTo failed');
@@ -232,7 +278,10 @@ export default function PlayerScreen() {
       const [em, es] = items[index + 1].time.split(':').map(Number);
       endMs = (em * 60 + es) * 1000;
     }
-    const dur = endMs - startMs;
+    // Wall-clock duration must account for playback rate: at 0.5× the segment
+    // takes twice as long to play, at 2× half as long. Without this the loop
+    // cut off early (slow) or ran into the next sentence (fast).
+    const dur = (endMs - startMs) / (rateRef.current || 1);
 
     try {
       await seek(MAIN_ID, startMs);
@@ -262,7 +311,7 @@ export default function PlayerScreen() {
     // Ensure native player is loaded (may not be if user opens echo before playing)
     if (file?.uri) {
       try {
-        await load(MAIN_ID, file.uri, rateRef.current, loopRef.current);
+        await loadMain();
       } catch (e: any) {
         console.warn('[Player] startEcho load failed:', file.uri, e?.message);
         Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
@@ -338,26 +387,34 @@ export default function PlayerScreen() {
     } catch {}
   };
 
-  // ── Echo word tap → WordDetail ──
+  // ── Echo word tap → open inline lookup sheet (no navigation) ──
   const handleEchoWordPress = (word: string) => {
     const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
     if (!clean) return;
-    navigation.navigate('WordDetail', { word: clean, source: 'AI 精听回声跟读' });
+    setEchoWord(clean);
   };
 
-  // Render Korean text with tappable words for the echo modal
-  const renderEchoText = (text: string) =>
-    text.split(/(\s+)/).map((part, i) => {
-      if (part.trim() === '') return <Text key={i}>{part}</Text>;
-      if (/[가-힣a-zA-Z]/.test(part)) {
-        return (
-          <Text key={i} style={{ textDecorationLine: 'underline', textDecorationColor: 'rgba(124,92,252,0.3)' }} onPress={() => handleEchoWordPress(part)}>
-            {part}
-          </Text>
-        );
-      }
-      return <Text key={i}>{part}</Text>;
+  const saveEchoWord = () => {
+    if (!echoWord || echoWordSaved) { setEchoWord(null); return; }
+    const data = echoWordLookup.data;
+    const isLoanword = /^[a-zA-Z]+$/.test(echoWord);
+    addWord({
+      id: Date.now().toString(),
+      ko: echoWord,
+      base: data?.base || echoWord,
+      roma: romanize(echoWord),
+      pos: data?.pos || (isLoanword ? '외래어 (外来词)' : '명사 (名词)'),
+      meaning: data?.meanings?.join('；') || `${echoWord} 的中文释义`,
+      example: data?.example || '',
+      source: `AI 精听回声跟读 · ${file?.name || ''}`,
+      tags: isLoanword ? ['外来词'] : ['常用'],
+      mastered: false,
+      isLoanword,
+      section: 'listen',
+      savedAt: Date.now(),
     });
+    setEchoWord(null);
+  };
 
   // ── Render ──
   return (
@@ -393,14 +450,18 @@ export default function PlayerScreen() {
               onPress={() => seekToTranscriptIdx(index)}
             >
               <Text style={[S.textXs, S.text3, S.mb1]}>{item.time}</Text>
-              <Text style={[{ fontSize: 17, lineHeight: 30, letterSpacing: 2 }, index === transcriptIdx ? [S.text, S.semibold] : S.text2]}>
-                {item.ko}
-              </Text>
-              {item.roma ? (
-                <Text style={[S.textXxs, { color: C.accent, marginTop: 2, marginLeft: 4, letterSpacing: 0.8 }]}>
-                  {item.roma}
-                </Text>
-              ) : null}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {romanizeWords(item.ko).map((p, wi) => (
+                  <View key={wi} style={{ marginRight: 14, marginBottom: 6, alignItems: 'flex-start' }}>
+                    <Text style={[{ fontSize: 18, lineHeight: 26, letterSpacing: 1.5 }, index === transcriptIdx ? [S.text, S.semibold] : S.text2]}>
+                      {p.ko}
+                    </Text>
+                    <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>
+                      {p.roma}
+                    </Text>
+                  </View>
+                ))}
+              </View>
               {(showTranslation || index === transcriptIdx) && item.zh ? (
                 <Text style={[S.textSm, S.text2, S.mt1]}>{item.zh}</Text>
               ) : null}
@@ -455,17 +516,22 @@ export default function PlayerScreen() {
               <Text style={[S.textXs, S.textAccent, S.semibold]}>{echoIdx + 1} / {items.length}</Text>
             </View>
 
-            {/* Korean text — words tappable for lookup */}
-            <Text style={[S.text2xl, S.text, S.bold, S.textCenter, { lineHeight: 40, marginBottom: 12 }]}>
-              {items[echoIdx]?.ko ? renderEchoText(items[echoIdx].ko) : ''}
-            </Text>
-
-            {/* Romanization — one line per Korean line */}
-            {items[echoIdx]?.roma ? (
-              <View style={[{ borderLeftWidth: 2, borderLeftColor: 'rgba(124,92,252,0.3)', paddingLeft: 12, marginBottom: 8 }]}>
-                <Text style={[S.textXs, { color: C.accent, letterSpacing: 1 }]}>
-                  {items[echoIdx].roma}
-                </Text>
+            {/* Korean text with romaja under each word — words tappable for lookup */}
+            {items[echoIdx]?.ko ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-end', marginBottom: 12 }}>
+                {romanizeWords(items[echoIdx].ko).map((p, wi) => (
+                  <View key={wi} style={{ marginHorizontal: 6, marginBottom: 8, alignItems: 'center' }}>
+                    <Text
+                      style={[S.text, S.bold, { fontSize: 18, lineHeight: 24, letterSpacing: 0.5, textDecorationLine: 'underline', textDecorationColor: 'rgba(124,92,252,0.3)' }]}
+                      onPress={() => handleEchoWordPress(p.ko)}
+                    >
+                      {p.ko}
+                    </Text>
+                    <Text style={[S.textXxs, { color: C.accent, marginTop: 2, letterSpacing: 0.3 }]}>
+                      {p.roma}
+                    </Text>
+                  </View>
+                ))}
               </View>
             ) : null}
 
@@ -647,8 +713,56 @@ export default function PlayerScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* ── Nested word-lookup sheet (stays inside echo modal) ── */}
+          <Modal visible={!!echoWord} transparent animationType="slide" onRequestClose={() => setEchoWord(null)}>
+            <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => setEchoWord(null)}>
+              <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 20, paddingBottom: insets.bottom + 24, maxHeight: '70%' as any }]}>
+                <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
+                <Text style={[S.textLg, S.bold, S.text]}>
+                  {echoWord}{' '}
+                  <Text style={[S.textXs, S.textAccent]}>{echoWord ? romanize(echoWord) : ''}</Text>
+                </Text>
+
+                {echoWordLookup.isLoading ? (
+                  <ActivityIndicator color={C.accent} style={{ marginVertical: 16 }} />
+                ) : (
+                  <>
+                    {echoWordLookup.data?.pos ? (
+                      <View style={[S.row, S.gap15, S.mt3]}>
+                        <View style={[S.bgAccent15, S.roundedFull, { paddingHorizontal: 8, paddingVertical: 2 }]}>
+                          <Text style={[S.textXs, S.textAccent, S.semibold]}>{echoWordLookup.data.pos}</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                    <Text style={[S.textBase, S.text, S.mt3]}>{echoWordLookup.data?.meanings?.join('；') || '释义加载中...'}</Text>
+                    {echoWordLookup.data?.example ? (
+                      <Text style={[S.textSm, S.text2, S.mt2]}>{echoWordLookup.data.example}</Text>
+                    ) : null}
+                  </>
+                )}
+
+                <TouchableOpacity style={[S.py3, S.roundedFull, echoWordSaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter, S.mt5]} onPress={saveEchoWord}>
+                  <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
+                    {echoWordSaved ? <Star size={14} color="#fff" fill="#fff" /> : <Star size={14} color="#fff" />}
+                    <Text style={[S.textSm, S.textWhite, S.semibold]}>{echoWordSaved ? '已在学习库' : '收藏到学习库'}</Text>
+                  </View>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
         </View>
       </Modal>
+
+      {/* Restoring-from-Qiniu overlay */}
+      {restoring && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={[S.bgSurface, S.roundedSM, { paddingHorizontal: 24, paddingVertical: 20, alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color={C.accent} />
+            <Text style={[S.textSm, S.text2, S.mt3]}>正在从云端恢复音频...</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

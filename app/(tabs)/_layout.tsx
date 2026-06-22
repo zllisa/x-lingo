@@ -1,6 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BookOpen, Headphones, MessageCircle, User } from 'lucide-react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useProfileStore } from '../../stores/useProfileStore';
+import LevelOnboarding from '../onboarding/level';
 import LibraryScreen from './library';
 import ListenScreen from './listen';
 import ProfileScreen from './profile';
@@ -17,7 +20,9 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const levelOnboarded = useProfileStore((s) => s.settings.levelOnboarded);
   return (
+    <View style={{ flex: 1 }}>
     <Tab.Navigator screenOptions={{
       headerShown: false,
       tabBarActiveTintColor: '#7c5cfc',
@@ -30,5 +35,8 @@ export default function TabLayout() {
       <Tab.Screen name="Library" component={LibraryScreen} options={{ title: '学习库', tabBarIcon: ({ color, size }) => <BookOpen size={size ?? 24} color={color} /> }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: '我的', tabBarIcon: ({ color, size }) => <User size={size ?? 24} color={color} /> }} />
     </Tab.Navigator>
+    {/* First-launch level picker — shown once for logged-in OR guest users */}
+    {!levelOnboarded && <LevelOnboarding />}
+    </View>
   );
 }

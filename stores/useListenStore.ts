@@ -25,6 +25,7 @@ interface ListenStore {
   toggleTranslation: () => void;
   setTranscript: (fileId: string, items: TranscriptItem[]) => void;
   setExplain: (fileId: string, sentenceIdx: number, explain: NonNullable<TranscriptItem['explain']>) => void;
+  setRemoteAudioUrl: (fileId: string, url: string) => void;
 }
 
 export const useListenStore = create<ListenStore>()(
@@ -67,6 +68,10 @@ export const useListenStore = create<ListenStore>()(
       toggleTranslation: () => set((s) => ({ showTranslation: !s.showTranslation })),
       setTranscript: (fileId, items) =>
         set((s) => ({ transcripts: { ...s.transcripts, [fileId]: items } })),
+      setRemoteAudioUrl: (fileId, url) =>
+        set((s) => ({
+          audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, remoteAudioUrl: url } : f)),
+        })),
       setExplain: (fileId, sentenceIdx, explain) =>
         set((s) => {
           const items = [...(s.transcripts[fileId] || [])];

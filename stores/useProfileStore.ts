@@ -32,7 +32,7 @@ export const useProfileStore = create<ProfileStore>()(
       checkinDates: [],
       todayStudyMinutes: 0,
       studyDate: todayStr(),
-      settings: { romaVisible: false, playbackSpeed: 0.85 },
+      settings: { romaVisible: false, playbackSpeed: 0.85, speakLevel: 'beginner' },
 
       setProfile: (p) => set((s) => ({ profile: { ...s.profile, ...p } })),
       addStudyMinute: () => set((s) => {
@@ -76,7 +76,7 @@ export const useProfileStore = create<ProfileStore>()(
         checkinDates: [],
         todayStudyMinutes: 0,
         studyDate: todayStr(),
-        settings: { romaVisible: false, playbackSpeed: 0.85 },
+        settings: { romaVisible: false, playbackSpeed: 0.85, speakLevel: 'beginner' },
       }),
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },

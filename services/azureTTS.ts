@@ -3,12 +3,14 @@ import { AZURE_TTS_KEY, AZURE_TTS_REGION } from '../constants/api';
 const ENDPOINT = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
 function buildSSML(text: string, speed: number = 1): string {
-  // Percentage rate: 0.5 → "50%", 1.5 → "150%", 2 → "200%"
-  const pct = Math.round(speed * 100);
-  console.log('[Azure TTS] speed param:', speed, '→ SSML rate:', `${pct}%`);
+  // IMPORTANT: Azure ignores a bare percentage like "70%" for prosody rate —
+  // it only honors a SIGNED percentage ("-30%") or a plain number multiplier.
+  // Use the multiplier form (0.7 = 70% of normal speed) so the rate applies.
+  const rate = speed.toFixed(2);
+  console.log('[Azure TTS] speed param:', speed, '→ SSML rate:', rate);
   return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ko-KR">
     <voice name="ko-KR-SunHiNeural">
-      <prosody rate="${pct}%">${text}</prosody>
+      <prosody rate="${rate}">${text}</prosody>
     </voice>
   </speak>`;
 }
@@ -19,7 +21,9 @@ export async function azureTTS(text: string, speed: number = 1): Promise<string>
     headers: {
       'Ocp-Apim-Subscription-Key': AZURE_TTS_KEY,
       'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
+      // Neural voices are natively 24kHz. Requesting 16kHz made players that
+      // assume 24kHz play it back ~1.5× too fast (sounded sped-up/high-pitched).
+      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
     },
     body: buildSSML(text, speed),
   });

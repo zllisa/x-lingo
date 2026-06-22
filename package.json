@@ -42,7 +42,8 @@
   "scripts": {
     "start": "react-native start",
     "android": "react-native run-android",
-    "ios": "react-native run-ios"
+    "ios": "react-native run-ios",
+    "reset": "bash scripts/clear-metro.sh"
   },
   "overrides": {
     "react": "19.2.3",

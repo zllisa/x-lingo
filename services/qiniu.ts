@@ -53,7 +53,7 @@ function getManagementToken(method: string, path: string, bodyStr: string): stri
 // ── upload ──
 
 export async function uploadToQiniu(fileUri: string): Promise<string> {
-  const key = `korean-ai-bot/video_${Date.now()}.mp4`;
+  const key = `lisa/video_${Date.now()}.mp4`;
   const token = getUploadToken();
 
   const formData = new FormData();
@@ -78,11 +78,15 @@ export async function uploadToQiniu(fileUri: string): Promise<string> {
 // ── pfop ──
 
 async function triggerTranscode(key: string): Promise<string> {
+  // saveas: pin the transcode output to lisa/ with a deterministic key,
+  // instead of letting Qiniu auto-generate one at the bucket root.
+  const outputKey = `lisa/audio_${Date.now()}.wav`;
+  const saveas = b64Encode(`${QINIU_BUCKET}:${outputKey}`);
   const body = new URLSearchParams({
     bucket: QINIU_BUCKET, key,
     // WAV PCM 16-bit LE 16kHz mono — optimal for speech recognition.
     // No ID3/metadata headers, no compression artifacts.
-    fops: 'avthumb/wav/acodec/pcm_s16le/ar/16000/ac/1',
+    fops: `avthumb/wav/acodec/pcm_s16le/ar/16000/ac/1|saveas/${saveas}`,
   }).toString();
 
   const resp = await fetch('https://api.qiniu.com/pfop/', {
@@ -128,14 +132,35 @@ async function waitForTranscode(persistentId: string): Promise<string> {
 // ── public ──
 
 /**
+ * Download a Qiniu audio URL to the local cache via RNFS (native downloader).
+ * Returns a file:// URI. Reused both during extraction and later when the
+ * cached file has been purged and must be re-fetched for playback.
+ */
+export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
+  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.wav`;
+
+  console.log('[Qiniu] Downloading', downloadUrl, '→', localPath);
+  const dl = downloadFile({ fromUrl: downloadUrl, toFile: localPath });
+  const result = await dl.promise;
+  console.log('[Qiniu] Downloaded', result.bytesWritten, 'bytes, status:', result.statusCode);
+
+  if (result.statusCode !== 200) {
+    throw new Error(`Qiniu download: HTTP ${result.statusCode}`);
+  }
+  return `file://${localPath}`;
+}
+
+/**
  * Extract audio from video via Qiniu:
  * 1. Upload video
  * 2. Trigger avthumb/wav persistent processing (PCM 16kHz mono)
  * 3. Poll until complete
  * 4. Download result wav via RNFS.downloadFile (reliable native downloader)
- * Returns file:// URI to the downloaded wav.
+ *
+ * Returns the local file:// URI plus the durable remote URL (so the caller
+ * can persist it and re-download after the local cache is purged).
  */
-export async function qiniuExtractAudio(videoUri: string): Promise<string> {
+export async function qiniuExtractAudio(videoUri: string): Promise<{ uri: string; remoteUrl: string }> {
   // 1. Upload
   const key = await uploadToQiniu(videoUri);
 
@@ -144,20 +169,13 @@ export async function qiniuExtractAudio(videoUri: string): Promise<string> {
   const outputKey = await waitForTranscode(pid);
 
   // 3. Download via RNFS (native, no JS memory pressure)
-  const downloadUrl = `${QINIU_DOMAIN}/${outputKey}`;
-  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.wav`;
+  const remoteUrl = `${QINIU_DOMAIN}/${outputKey}`;
+  const uri = await downloadQiniuAudio(remoteUrl);
 
-  console.log('[Qiniu] Downloading', downloadUrl, '→', localPath);
-  const dl = downloadFile({
-    fromUrl: downloadUrl,
-    toFile: localPath,
-  });
-  const result = await dl.promise;
-  console.log('[Qiniu] Downloaded', result.bytesWritten, 'bytes, status:', result.statusCode);
-
-  // Verify: read back first bytes to confirm the file is a valid mp3
+  // Verify: read back first bytes to confirm the file is valid
   const { readFile } = require('@dr.pogodin/react-native-fs');
   try {
+    const localPath = uri.replace(/^file:\/\//, '');
     const b64 = await readFile(localPath, 'base64');
     console.log('[Qiniu] Verify: file on disk', b64.length, 'chars base64');
     if (b64.length > 0) {
@@ -172,9 +190,5 @@ export async function qiniuExtractAudio(videoUri: string): Promise<string> {
     console.log('[Qiniu] Verify failed:', e?.message);
   }
 
-  if (result.statusCode !== 200) {
-    throw new Error(`Qiniu download: HTTP ${result.statusCode}`);
-  }
-
-  return `file://${localPath}`;
+  return { uri, remoteUrl };
 }

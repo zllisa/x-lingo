@@ -11,6 +11,8 @@ import { useLibraryStore } from '../stores/useLibraryStore';
 import { S } from '../utils/theme';
 import TabLayout from './(tabs)/_layout';
 import ChatScreen from './speak/chat';
+import TaskIntroScreen from './speak/task-intro';
+import ConversationsScreen from './speak/conversations';
 import WordDetailModal from './modals/word-detail';
 import SentenceDetailModal from './modals/sentence-detail';
 import PlayerScreen from './listen/player';
@@ -20,6 +22,8 @@ import LoginScreen from './auth/login';
 export type RootStackParamList = {
   Tabs: undefined;
   Chat: undefined;
+  TaskIntro: undefined;
+  Conversations: undefined;
   Player: undefined;
   Calendar: undefined;
   WordDetail: { word: string; source: string };
@@ -65,6 +69,8 @@ export default function App() {
             <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={isLoggedIn ? 'Tabs' : 'Login'}>
               <Stack.Screen name="Tabs" component={TabLayout} />
               <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="TaskIntro" component={TaskIntroScreen} />
+              <Stack.Screen name="Conversations" component={ConversationsScreen} />
               <Stack.Screen name="Player" component={PlayerScreen} />
               <Stack.Screen name="Calendar" component={CalendarScreen} />
               <Stack.Screen name="WordDetail" component={WordDetailModal} options={{ presentation: 'transparentModal' }} />

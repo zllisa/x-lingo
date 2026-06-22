@@ -1,4 +1,4 @@
-import { GROQ_API_KEY, DEEPSEEK_API_KEY } from '../constants/api';
+import { GROQ_API_KEY } from '../constants/api';
 const ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
 export async function whisperSTT(fileUri: string): Promise<string> {
@@ -32,64 +32,22 @@ export interface WhisperSegment {
 }
 
 /**
- * Sentence split prompt updated to handle mixed Korean/English text.
- * Whisper no longer has language='ko' forced, so the raw text may contain
- * English sentences (especially at the beginning of videos with mixed audio).
+ * Whether a Whisper segment's text ends a sentence.
+ *
+ * Used to merge Whisper's raw (sometimes fragmentary) segments into full
+ * sentences WITHOUT touching their timestamps. We break on terminal
+ * punctuation, or on a Korean sentence-final ending (다/요/까/죠 …).
+ * Connective endings (~하고, ~지만, ~는데, ~서 …) are NOT matched, so a
+ * clause that continues into the next segment stays merged.
  */
-const SENTENCE_SPLIT_PROMPT = `You are a Korean and English sentence splitter. Split the following Korean/English mixed text into natural sentences. Return ONLY a JSON array of strings, one string per sentence. Do NOT add any other text. Keep English sentences intact — do not translate them.
-
-Example 1 (Korean):
-Input: "안녕하세요 저는 학생입니다 반갑습니다"
-Output: ["안녕하세요", "저는 학생입니다", "반갑습니다"]
-
-Example 2 (Mixed):
-Input: "Hello everyone today we will learn Korean 안녕하세요 오늘은 한국어를 배워볼게요"
-Output: ["Hello everyone", "today we will learn Korean", "안녕하세요", "오늘은 한국어를 배워볼게요"]`;
-
-/**
- * Use DeepSeek to split Korean text into natural sentences.
- * Much more reliable than regex — understands semantics.
- */
-async function deepSeekSplitSentences(fullText: string): Promise<string[]> {
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: SENTENCE_SPLIT_PROMPT },
-        { role: 'user', content: fullText },
-      ],
-      temperature: 0,
-      max_tokens: 2000,
-    }),
-  });
-
-  if (!response.ok) throw new Error(`DeepSeek sentence split error: ${response.status}`);
-  const data = await response.json();
-  const raw = (data.choices[0].message.content as string || '').trim();
-  console.log('[Whisper] DeepSeek split raw:', raw.substring(0, 500));
-
-  // Try to parse as JSON array
-  let jsonStr = raw.replace(/^```(?:json)?\s*/g, '').replace(/\s*```$/g, '').trim();
-  const bracketStart = jsonStr.indexOf('[');
-  const bracketEnd = jsonStr.lastIndexOf(']');
-  if (bracketStart >= 0 && bracketEnd > bracketStart) {
-    jsonStr = jsonStr.substring(bracketStart, bracketEnd + 1);
-  }
-
-  try {
-    const sentences: string[] = JSON.parse(jsonStr);
-    return sentences.filter((s: string) => s.trim().length > 0);
-  } catch (e: any) {
-    console.warn('[Whisper] DeepSeek split JSON parse failed:', e?.message);
-    // Fallback: split by Whisper's own segment boundaries
-    console.log('[Whisper] Falling back to segment-level sentences');
-    return [];
-  }
+function endsWithSentenceFinal(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  // Terminal punctuation
+  if (/[.!?。…！？]$/.test(t)) return true;
+  // Korean sentence-final endings (strip any trailing punctuation/quotes first)
+  const stripped = t.replace(/["'”’)\]】」』.!?。…！？]+$/g, '').trim();
+  return /(다|요|까|죠|네요|군요)$/.test(stripped);
 }
 
 export async function whisperSTTWithTimestamps(fileUri: string): Promise<WhisperSegment[]> {
@@ -136,91 +94,38 @@ export async function whisperSTTWithTimestamps(fileUri: string): Promise<Whisper
     }
   });
 
-  // ── Approach: DeepSeek sentence split + proportional timestamps ──
-  const fullText = (data.segments || []).map((s: any) => s.text).join(' ').trim();
-  console.log('[Whisper] Full text:', fullText);
+  // ── Merge Whisper segments into sentences using Whisper's OWN timestamps ──
+  // Whisper's verbose_json segment boundaries are accurate (they account for
+  // silence gaps), so we keep them verbatim and only stitch fragmentary
+  // segments together until a sentence-final ending is reached. We no longer
+  // route through DeepSeek for splitting — that rewrote the text and broke the
+  // indexOf-based timestamp remapping, collapsing later sentences onto wrong
+  // times.
+  const rawSegs: Array<{ start: number; end: number; text: string }> =
+    (data.segments || [])
+      .map((s: any) => ({ start: s.start, end: s.end, text: (s.text || '').trim() }))
+      .filter((s: { text: string }) => s.text.length > 0);
 
-  if (!fullText) throw new Error('Whisper 没有识别到任何语音内容');
-
-  // Use DeepSeek to split into natural sentences
-  console.log('[Whisper] Asking DeepSeek to split sentences...');
-  const sentences = await deepSeekSplitSentences(fullText);
-
-  // Fallback: DeepSeek failed → use Whisper's own segment text directly
-  if (!sentences.length) {
-    console.log('[Whisper] DeepSeek split failed, using Whisper segments directly');
-    return (data.segments || []).map((seg: any) => ({
-      start: seg.start,
-      end: seg.end,
-      text: seg.text.trim(),
-    }));
-  }
-  console.log('[Whisper] DeepSeek split result:', sentences.length, 'sentences');
-
-  // Build segments with proportional timestamps anchored to Whisper segments.
-  // Whisper's segment boundaries account for silence gaps (e.g. 4s of silence
-  // at the start won't be allocated as "speech time").
-  const whisperSegs: Array<{ start: number; end: number; text: string }> =
-    (data.segments || []).map((s: any) => ({ start: s.start, end: s.end, text: s.text?.trim() || '' }));
+  if (!rawSegs.length) throw new Error('Whisper 没有识别到任何语音内容');
 
   const segments: WhisperSegment[] = [];
-  let wsIdx = 0;   // current Whisper segment index
-  let wsPos = 0;   // char position within the current Whisper segment's text
+  let curText = '';
+  let curStart = -1;
+  let curEnd = 0;
 
-  for (const sentence of sentences) {
-    // Find which Whisper segment(s) this sentence falls into
-    const ws = whisperSegs[wsIdx];
-    if (!ws) break;
-
-    const wsText = ws.text;
-    const wsDuration = ws.end - ws.start;
-
-    // Simple overlap: map sentence start/end to positions within wsText
-    const sentStart = wsText.indexOf(sentence, wsPos);
-    if (sentStart === -1) {
-      // Sentence not found in current segment — try next segment
-      wsIdx++;
-      const nextWs = whisperSegs[wsIdx];
-      if (!nextWs) {
-        // Fallback: proportional from last timestamp
-        const last = segments[segments.length - 1];
-        segments.push({ start: last?.end || 0, end: (last?.end || 0) + 3, text: sentence });
-        continue;
-      }
-      const nextIdx = nextWs.text.indexOf(sentence);
-      if (nextIdx === -1) {
-        // Still not found — proportional
-        const last = segments[segments.length - 1];
-        segments.push({ start: last?.end || 0, end: (last?.end || 0) + 3, text: sentence });
-        continue;
-      }
-      const fracStart = nextIdx / Math.max(1, nextWs.text.length);
-      const fracEnd = (nextIdx + sentence.length) / Math.max(1, nextWs.text.length);
-      segments.push({
-        start: nextWs.start + fracStart * wsDuration,
-        end: nextWs.start + fracEnd * wsDuration,
-        text: sentence,
-      });
-      wsPos = nextIdx + sentence.length;
-      continue;
+  for (const seg of rawSegs) {
+    if (curStart < 0) curStart = seg.start;
+    curText = curText ? `${curText} ${seg.text}` : seg.text;
+    curEnd = seg.end;
+    if (endsWithSentenceFinal(seg.text)) {
+      segments.push({ start: curStart, end: curEnd, text: curText });
+      curText = '';
+      curStart = -1;
     }
-
-    const fracStart = sentStart / Math.max(1, wsText.length);
-    const fracEnd = (sentStart + sentence.length) / Math.max(1, wsText.length);
-    segments.push({
-      start: ws.start + fracStart * wsDuration,
-      end: ws.start + fracEnd * wsDuration,
-      text: sentence,
-    });
-    wsPos = sentStart + sentence.length;
   }
-
-  // Any remaining sentences (if we ran out of Whisper segments)
-  if (segments.length < sentences.length) {
-    for (let i = segments.length; i < sentences.length; i++) {
-      const last = segments[segments.length - 1];
-      segments.push({ start: last?.end || 0, end: (last?.end || 0) + 3, text: sentences[i] });
-    }
+  // Flush any trailing fragment that never hit a sentence-final ending
+  if (curText) {
+    segments.push({ start: curStart < 0 ? 0 : curStart, end: curEnd, text: curText });
   }
 
   console.log('[Whisper] Final segments:', segments.length);
