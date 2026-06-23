@@ -450,7 +450,7 @@ function UserMessage({ item, renderText, onSentencePress, context }: UserMessage
       </View>
       {/* Suggestion card aligns to the RIGHT, under the user bubble */}
       {suggestion ? (
-        <View style={[S.bgSurface2, S.roundedSM, { padding: 12, marginBottom: 10, maxWidth: '88%' as any, alignSelf: 'flex-end', borderWidth: 1, borderColor: C.border }]}>
+        <View style={[S.bgSurface, S.roundedSM, { padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.border }]}>
           {suggestion.intent ? (
             <View style={[S.flexRow, S.gap1, { marginBottom: 6 }]}>
               <Lightbulb size={15} color={C.text3} style={{ marginTop: 2 }} />

@@ -1,6 +1,6 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, ActivityIndicator, View, Text } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,6 +18,7 @@ import SentenceDetailModal from './modals/sentence-detail';
 import PlayerScreen from './listen/player';
 import CalendarScreen from './calendar';
 import LoginScreen from './auth/login';
+import MembershipScreen from './membership';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -26,6 +27,7 @@ export type RootStackParamList = {
   Conversations: undefined;
   Player: undefined;
   Calendar: undefined;
+  Membership: undefined;
   WordDetail: { word: string; source: string };
   SentenceDetail: { text: string; source: string };
   Login: undefined;
@@ -54,7 +56,7 @@ export default function App() {
   if (checking) {
     return (
       <View style={[S.flex1, S.center, S.bg]}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🇰🇷</Text>
+        <Image source={require('../assets/icon.png')} style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 20 }} />
         <ActivityIndicator size="large" color="#7c5cfc" />
       </View>
     );
@@ -76,6 +78,7 @@ export default function App() {
               <Stack.Screen name="WordDetail" component={WordDetailModal} options={{ presentation: 'transparentModal' }} />
               <Stack.Screen name="SentenceDetail" component={SentenceDetailModal} options={{ presentation: 'transparentModal' }} />
               <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Membership" component={MembershipScreen} />
             </Stack.Navigator>
           </NavigationContainer>
         </QueryClientProvider>

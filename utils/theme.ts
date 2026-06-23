@@ -134,7 +134,9 @@ export const S = StyleSheet.create({
   bubbleAI: {
     alignSelf: 'flex-start' as const,
     maxWidth: '85%' as const,
-    backgroundColor: C.surface2,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,

@@ -62,6 +62,7 @@ export default function PlayerScreen() {
   // from Qiniu if the local cache was purged). Reset when the file changes.
   const playableUriRef = useRef<string | null>(null);
 
+  const [showRomaja, setShowRomaja] = useState(true);
   const [durationMs, setDurationMs] = useState(0);
   const [currentMs, setCurrentMs] = useState(0);
   const [loopMode, setLoopMode] = useState(false);
@@ -456,9 +457,11 @@ export default function PlayerScreen() {
                     <Text style={[{ fontSize: 18, lineHeight: 26, letterSpacing: 1.5 }, index === transcriptIdx ? [S.text, S.semibold] : S.text2]}>
                       {p.ko}
                     </Text>
-                    <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>
-                      {p.roma}
-                    </Text>
+                    {showRomaja ? (
+                      <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>
+                        {p.roma}
+                      </Text>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -477,7 +480,14 @@ export default function PlayerScreen() {
             <View style={{ height: 4, backgroundColor: C.border, borderRadius: 2 }}><View style={{ height: 4, backgroundColor: C.accent, borderRadius: 2, width: `${progress}%` as any }} /></View>
             <View style={[S.spaceBetween, { marginTop: 4 }]}>
               <Text style={[S.textXs, S.text3]}>{formatMs(currentMs)}</Text>
-              <TouchableOpacity onPress={() => toggleTranslation()}><Text style={[S.textXs, showTranslation ? S.textAccent : S.text3]}>{showTranslation ? '隐藏译文' : '显示译文'}</Text></TouchableOpacity>
+              <View style={[S.flexRow, S.itemsCenter, { gap: 14 }]}>
+                <TouchableOpacity onPress={() => setShowRomaja(v => !v)}>
+                  <Text style={[S.textXs, S.semibold, showRomaja ? S.textAccent : S.text3]}>罗马音</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => toggleTranslation()}>
+                  <Text style={[S.textXs, showTranslation ? S.textAccent : S.text3]}>{showTranslation ? '隐藏译文' : '显示译文'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
           <View style={[S.row, S.justifyCenter, S.gap15, S.mb3]}>

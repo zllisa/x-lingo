@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView, Modal } from 'react-native';
-import { ArrowUpCircle, Check, ChevronDown, GraduationCap, History, Sparkles, Theater, Wand2 } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSpeakStore } from '../../stores/useSpeakStore';
+import { Check, ChevronDown, ChevronRight, GraduationCap, History, MessageSquare, Mic, Sparkles, Wand2 } from 'lucide-react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProfileStore } from '../../stores/useProfileStore';
+import { useSpeakStore } from '../../stores/useSpeakStore';
 import { SpeakLevel } from '../../types';
-import { S, C } from '../../utils/theme';
+import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -18,28 +18,36 @@ const LEVELS: { key: SpeakLevel; label: string }[] = [
   { key: 'advanced', label: '高级' },
 ];
 const LEVEL_LABEL: Record<SpeakLevel, string> = { beginner: '初级', intermediate: '中级', advanced: '高级' };
-const NEXT_LEVEL: Partial<Record<SpeakLevel, SpeakLevel>> = { beginner: 'intermediate', intermediate: 'advanced' };
-// Completed scenario tasks needed before suggesting the next level.
-const LEVEL_UP_THRESHOLD: Record<SpeakLevel, number> = { beginner: 12, intermediate: 30, advanced: Infinity };
+
+/** ghost pill — matches design .gpill */
+const gpill: object[] = [
+  S.flexRow, S.itemsCenter, S.bgSurface, S.border, S.roundedFull,
+  { height: 36, paddingHorizontal: 13, gap: 5 },
+];
+
+const accentShadow = {
+  shadowColor: C.accent,
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 10,
+  elevation: 4,
+};
 
 export default function SpeakScreen() {
   const navigation = useNavigation<Nav>();
-  const { mode, setMode } = useSpeakStore();
-  const conversations = useSpeakStore((s) => s.conversations);
+  const { mode, setMode, conversations } = useSpeakStore();
   const speakLevel = useProfileStore((s) => s.settings.speakLevel ?? 'beginner');
-  const levelUpDismissed = useProfileStore((s) => s.settings.levelUpDismissed);
   const updateSettings = useProfileStore((s) => s.updateSettings);
   const [scenarioInput, setScenarioInput] = useState('');
   const [generating, setGenerating] = useState(false);
   const [showLevelMenu, setShowLevelMenu] = useState(false);
 
-  // 话题对话已并入情景模拟 — 仅保留 scenario / free
   const effectiveMode = mode === 'free' ? 'free' : 'scenario';
 
-  // ── Level-up suggestion: based on completed scenario tasks ──
-  const completedCount = conversations.reduce((n, c) => n + (c.completedTaskIds?.length || 0), 0);
-  const nextLevel = NEXT_LEVEL[speakLevel];
-  const suggestLevelUp = !!nextLevel && completedCount >= LEVEL_UP_THRESHOLD[speakLevel] && levelUpDismissed !== nextLevel;
+  // last scenario conversation for "continue" card
+  const lastConv = conversations.length
+    ? [...conversations].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+    : null;
 
   const generateScenario = async (desc: string) => {
     const text = desc.trim();
@@ -59,114 +67,185 @@ export default function SpeakScreen() {
   };
 
   return (
-    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
-      <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, S.mb4]}>
-        <Text style={[S.textXl, S.bold, S.text]}>口语练习</Text>
-        <View style={[S.flexRow, S.itemsCenter, S.gap2]}>
-          {/* Level chip — tap to change */}
-          <TouchableOpacity style={[S.flexRow, S.itemsCenter, S.gap1, S.bgSurface, S.border, S.roundedFull, { paddingHorizontal: 10, paddingVertical: 5 }]} onPress={() => setShowLevelMenu(true)}>
-            <GraduationCap size={14} color={C.accent} />
-            <Text style={[S.textXs, S.semibold, S.text]}>{LEVEL_LABEL[speakLevel]}</Text>
-            <ChevronDown size={12} color={C.text3} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[S.flexRow, S.itemsCenter, S.gap1]} onPress={() => navigation.navigate('Conversations')}>
-            <History size={18} color={C.accent} />
-            <Text style={[S.textSm, S.textAccent, S.semibold]}>历史</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
+      <View style={[S.flex1, S.px4, { paddingTop: 6 }]}>
 
-      {/* 达标建议升级 */}
-      {suggestLevelUp && nextLevel ? (
-        <View style={[S.bgAccent15, S.roundedCard, S.p3, S.mb4, S.flexRow, S.itemsCenter, S.gap2]}>
-          <ArrowUpCircle size={22} color={C.accent} />
+        {/* ── Header ── */}
+        <View style={[S.spaceBetween, { marginTop: 10, marginBottom: 18 }]}>
+          <Text style={[S.bold, S.text, { fontSize: 27, letterSpacing: -0.5 }]}>口语练习</Text>
+          <View style={[S.flexRow, S.itemsCenter, { gap: 8 }]}>
+            <TouchableOpacity style={gpill as any} onPress={() => setShowLevelMenu(true)}>
+              <GraduationCap size={15} color={C.text2} />
+              <Text style={[{ fontSize: 14 }, S.semibold, S.text2]}>{LEVEL_LABEL[speakLevel]}</Text>
+              <ChevronDown size={14} color={C.text2} />
+            </TouchableOpacity>
+            <TouchableOpacity style={gpill as any} onPress={() => navigation.navigate('Conversations')}>
+              <History size={15} color={C.text2} />
+              <Text style={[{ fontSize: 14 }, S.semibold, S.text2]}>历史</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Segment tabs ── */}
+        <View style={[S.flexRow, { gap: 12, marginBottom: 18 }]}>
+          {([
+            { key: 'scenario', icon: <Sparkles size={18} color={effectiveMode === 'scenario' ? '#fff' : C.text2} />, label: '情景模拟' },
+            { key: 'free',     icon: <MessageSquare size={18} color={effectiveMode === 'free' ? '#fff' : C.text2} />, label: '自由对话' },
+          ] as const).map(({ key, icon, label }) => {
+            const on = effectiveMode === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[
+                  S.flex1, S.roundedCard,
+                  { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+                  on ? [S.bgAccent, accentShadow] : [S.bgSurface, S.border],
+                ]}
+                onPress={() => setMode(key as any)}
+                activeOpacity={0.8}
+              >
+                {icon}
+                <Text style={[{ fontSize: 16 }, S.bold, on ? S.textWhite : S.text2]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Scenario mode ── */}
+        {effectiveMode === 'scenario' ? (
           <View style={{ flex: 1 }}>
-            <Text style={[S.textSm, S.semibold, S.text]}>你已完成 {completedCount} 个口语任务</Text>
-            <Text style={[S.textXs, S.text2, { marginTop: 2 }]}>要不要把水平升到「{LEVEL_LABEL[nextLevel]}」，挑战更难的对话？</Text>
-          </View>
-          <View style={[S.gap1]}>
-            <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 14, paddingVertical: 6 }]} onPress={() => updateSettings({ speakLevel: nextLevel })}>
-              <Text style={[S.textXs, S.textWhite, S.semibold]}>升级</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ paddingHorizontal: 14, paddingVertical: 4 }} onPress={() => updateSettings({ levelUpDismissed: nextLevel })}>
-              <Text style={[S.textXs, S.text3]}>以后再说</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
+            <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+              <Text style={[{ fontSize: 15 }, S.text2, { lineHeight: 23, marginBottom: 14 }]}>
+                描述一个生活场景，AI 会扮演对应角色，按你的水平生成几个任务，带你一步步用韩语完成。
+              </Text>
 
-      {/* 模式 */}
-      <View style={[S.row, S.gap2, S.mb4]}>
-        <TouchableOpacity style={[S.flex1, S.py25, S.roundedCard, S.itemsCenter, effectiveMode === 'scenario' ? S.bgAccent : [S.bgSurface, S.border]]} onPress={() => setMode('scenario')}>
-          <View style={[S.row, S.itemsCenter, S.gap1]}>
-            <Sparkles size={14} color={effectiveMode === 'scenario' ? '#fff' : C.text2} />
-            <Text style={[S.textSm, S.semibold, effectiveMode === 'scenario' ? S.textWhite : S.text2]}>情景模拟</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={[S.flex1, S.py25, S.roundedCard, S.itemsCenter, effectiveMode === 'free' ? S.bgAccent : [S.bgSurface, S.border]]} onPress={() => setMode('free')}>
-          <View style={[S.row, S.itemsCenter, S.gap1]}>
-            <Theater size={14} color={effectiveMode === 'free' ? '#fff' : C.text2} />
-            <Text style={[S.textSm, S.semibold, effectiveMode === 'free' ? S.textWhite : S.text2]}>自由对话</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+              {/* Input */}
+              <View style={[S.bgSurface, S.border, S.roundedCard, { height: 54, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 14 }]}>
+                <TextInput
+                  style={[S.text, { fontSize: 15 }]}
+                  value={scenarioInput}
+                  onChangeText={setScenarioInput}
+                  placeholder="例如：在便利店买水和零食"
+                  placeholderTextColor={C.text3}
+                  editable={!generating}
+                />
+              </View>
 
-      {effectiveMode === 'scenario' ? (
-        <ScrollView style={S.flex1} keyboardShouldPersistTaps="handled">
-          <Text style={[S.textBase, S.text2, S.leading6, S.mb3]}>
-            描述一个生活场景，AI 会扮演对应角色，按你的水平生成几个任务，带你一步步用韩语完成。
-          </Text>
-          <TextInput
-            style={[S.bgSurface, S.border, S.roundedCard, S.px4, S.py3, S.textBase, S.text, { minHeight: 52 }]}
-            value={scenarioInput}
-            onChangeText={setScenarioInput}
-            placeholder="例如：在便利店买水和零食"
-            placeholderTextColor={C.text3}
-            editable={!generating}
-            multiline
-          />
+              {/* Generate button */}
+              <TouchableOpacity
+                style={[
+                  S.bgAccent, S.roundedFull,
+                  { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 24 },
+                  accentShadow,
+                  generating ? { opacity: 0.6 } : null,
+                ]}
+                onPress={() => generateScenario(scenarioInput)}
+                disabled={generating}
+              >
+                {generating ? <ActivityIndicator size="small" color="#fff" /> : <Wand2 size={19} color="#fff" />}
+                <Text style={[S.textWhite, S.bold, { fontSize: 17 }]}>{generating ? '正在生成场景...' : '生成场景'}</Text>
+              </TouchableOpacity>
+
+              {/* Suggestions */}
+              <Text style={[{ fontSize: 14 }, S.text3, { marginBottom: 10 }]}>试试这些</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {SCENARIO_SUGGESTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[S.bgSurface, S.border, S.roundedFull, { paddingHorizontal: 17, paddingVertical: 9 }, generating ? { opacity: 0.5 } : null]}
+                    onPress={() => generateScenario(s)}
+                    disabled={generating}
+                  >
+                    <Text style={[{ fontSize: 14 }, S.semibold, S.text2]}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Continue last session — pinned to bottom */}
+            {lastConv ? (
+              <View style={{ paddingTop: 20, paddingBottom: 16 }}>
+                <Text style={[{ fontSize: 14 }, S.text3, { marginBottom: 10 }]}>继续上次练习</Text>
+                <TouchableOpacity
+                  style={[S.bgSurface, S.border, S.roundedCard, S.p4, { flexDirection: 'row', alignItems: 'center', gap: 13 }]}
+                  onPress={() => { useSpeakStore.getState().openConversation(lastConv.id); navigation.navigate('Chat'); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[{ width: 48, height: 48, borderRadius: 12 }, S.bgAccent15, S.center]}>
+                    <Sparkles size={22} color={C.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[{ fontSize: 15 }, S.bold, S.text]} numberOfLines={1}>
+                      {lastConv.title || '对话记录'}
+                    </Text>
+                    {(() => {
+                      const done = lastConv.completedTaskIds?.length ?? 0;
+                      const total = lastConv.scenario?.tasks?.length ?? 0;
+                      const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                          <View style={{ flex: 1, height: 5, borderRadius: 3, backgroundColor: C.surface2, overflow: 'hidden' }}>
+                            <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: C.accent }} />
+                          </View>
+                          <Text style={[{ fontSize: 12 }, S.text3]}>{done}/{total} 任务</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                  <ChevronRight size={20} color={C.text3} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          /* ── Free mode ── */
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 14 }}>
+            <View style={[{ width: 96, height: 96, borderRadius: 48 }, S.bgAccent15, S.center, { marginBottom: 22 }]}>
+              <MessageSquare size={42} color={C.accent} />
+            </View>
+            <Text style={[{ fontSize: 22 }, S.bold, S.text, { marginBottom: 10 }]}>自由对话</Text>
+            <Text style={[{ fontSize: 15 }, S.text2, { lineHeight: 24, textAlign: 'center', marginBottom: 26 }]}>
+              无固定场景，支持闲聊、表达求助、日常问答。{'\n'}AI 陪练全程纯韩语回复。
+            </Text>
+            <TouchableOpacity
+              style={[
+                S.bgAccent, S.roundedFull,
+                { height: 56, paddingHorizontal: 40, flexDirection: 'row', alignItems: 'center', gap: 8 },
+                accentShadow,
+              ]}
+              onPress={() => { useSpeakStore.getState().startFreeConversation(); navigation.navigate('Chat'); }}
+              activeOpacity={0.85}
+            >
+              <Mic size={19} color="#fff" />
+              <Text style={[S.textWhite, S.semibold, { fontSize: 17 }]}>开始自由对话</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Level picker modal */}
+        <Modal visible={showLevelMenu} transparent animationType="fade" onRequestClose={() => setShowLevelMenu(false)}>
           <TouchableOpacity
-            style={[S.bgAccent, S.roundedFull, { paddingVertical: 14 }, S.center, S.flexRow, S.gap1, S.mt3, generating ? { opacity: 0.6 } : null]}
-            onPress={() => generateScenario(scenarioInput)}
-            disabled={generating}
+            style={[S.flex1, S.center, { backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 40 }]}
+            activeOpacity={1}
+            onPress={() => setShowLevelMenu(false)}
           >
-            {generating ? <ActivityIndicator size="small" color="#fff" /> : <Wand2 size={18} color="#fff" />}
-            <Text style={[S.textBase, S.textWhite, S.bold]}>{generating ? '正在生成场景...' : '生成场景'}</Text>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface, S.roundedCard, { width: '100%', paddingVertical: 8 }]}>
+              <Text style={[{ fontSize: 13 }, S.text3, S.semibold, { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 }]}>选择韩语水平</Text>
+              {LEVELS.map((lv) => (
+                <TouchableOpacity
+                  key={lv.key}
+                  style={[S.spaceBetween, { paddingHorizontal: 16, paddingVertical: 12 }]}
+                  onPress={() => { updateSettings({ speakLevel: lv.key }); setShowLevelMenu(false); }}
+                >
+                  <Text style={[{ fontSize: 16 }, speakLevel === lv.key ? [S.text, S.semibold] : S.text2]}>{lv.label}</Text>
+                  {speakLevel === lv.key ? <Check size={18} color={C.accent} /> : null}
+                </TouchableOpacity>
+              ))}
+            </TouchableOpacity>
           </TouchableOpacity>
+        </Modal>
 
-          <Text style={[S.textSm, S.text3, S.semibold, { marginTop: 24, marginBottom: 8 }]}>试试这些</Text>
-          <View style={[S.flexRow, { flexWrap: 'wrap', gap: 8 }]}>
-            {SCENARIO_SUGGESTIONS.map((s) => (
-              <TouchableOpacity key={s} style={[S.bgSurface, S.border, S.roundedFull, { paddingHorizontal: 14, paddingVertical: 8 }, generating ? { opacity: 0.5 } : null]} onPress={() => generateScenario(s)} disabled={generating}>
-                <Text style={[S.textSm, S.text2]}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      ) : (
-        <View style={[S.flex1, S.center, S.pb20]}>
-          <Theater size={60} color={C.accent} style={S.mb3} />
-          <Text style={[S.textLg, S.bold, S.text, S.mb2]}>自由对话</Text>
-          <Text style={[S.textBase, S.text2, S.textCenter, S.leading6, S.mb4]}>无固定场景，支持闲聊、表达求助、日常问答。{'\n'}AI 陪练全程纯韩语回复。</Text>
-          <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 32, paddingVertical: 12 }]} onPress={() => { useSpeakStore.getState().startFreeConversation(); navigation.navigate('Chat'); }}>
-            <Text style={[S.textWhite, S.semibold, S.textBase]}>开始自由对话</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {/* Level picker */}
-      <Modal visible={showLevelMenu} transparent animationType="fade" onRequestClose={() => setShowLevelMenu(false)}>
-        <TouchableOpacity style={[S.flex1, S.center, { backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 40 }]} activeOpacity={1} onPress={() => setShowLevelMenu(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface, S.roundedCard, { width: '100%', paddingVertical: 8 }]}>
-            <Text style={[S.textXs, S.text3, S.semibold, { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 }]}>选择韩语水平</Text>
-            {LEVELS.map((lv) => (
-              <TouchableOpacity key={lv.key} style={[S.flexRow, S.itemsCenter, S.spaceBetween, { paddingHorizontal: 16, paddingVertical: 12 }]} onPress={() => { updateSettings({ speakLevel: lv.key }); setShowLevelMenu(false); }}>
-                <Text style={[S.textBase, speakLevel === lv.key ? [S.text, S.semibold] : S.text2]}>{lv.label}</Text>
-                {speakLevel === lv.key ? <Check size={18} color={C.accent} /> : null}
-              </TouchableOpacity>
-            ))}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-    </View></SafeAreaView>
+      </View>
+    </SafeAreaView>
   );
 }

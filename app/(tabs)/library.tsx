@@ -70,27 +70,24 @@ export default function LibraryScreen() {
 
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
-      <View style={[S.row, S.bgSurface, S.roundedCard, { padding: 4 }, S.mb3]}>
-        {(['words', 'sentences', 'grammar'] as const).map(tab => (
-          <TouchableOpacity key={tab} style={[S.flex1, S.py2, S.roundedSM, S.itemsCenter, currentTab === tab ? S.bgAccent : undefined]} onPress={() => setTab(tab)}>
-            {tab === 'words' ? (
-              <View style={[S.row, S.gap1, S.itemsCenter]}>
-                <BookOpen size={14} color={currentTab === tab ? '#fff' : C.text2} />
-                <Text style={[S.textXs, S.semibold, currentTab === tab ? S.textWhite : S.text2]}>生词本</Text>
-              </View>
-            ) : tab === 'sentences' ? (
-              <View style={[S.row, S.gap1, S.itemsCenter]}>
-                <Star size={14} color={currentTab === tab ? '#fff' : C.text2} />
-                <Text style={[S.textXs, S.semibold, currentTab === tab ? S.textWhite : S.text2]}>句库</Text>
-              </View>
-            ) : (
-              <View style={[S.row, S.gap1, S.itemsCenter]}>
-                <GraduationCap size={14} color={currentTab === tab ? '#fff' : C.text2} />
-                <Text style={[S.textXs, S.semibold, currentTab === tab ? S.textWhite : S.text2]}>语法</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
+      <View style={[S.row, S.bgSurface, S.border, S.roundedFull, { padding: 4 }, S.mb3]}>
+        {([
+          { key: 'words',     Icon: BookOpen,      label: '生词本' },
+          { key: 'sentences', Icon: Star,           label: '句库'   },
+          { key: 'grammar',   Icon: GraduationCap, label: '语法'   },
+        ] as const).map(({ key, Icon, label }) => {
+          const on = currentTab === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[S.flex1, S.roundedFull, { height: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }, on ? S.bgAccent : undefined]}
+              onPress={() => setTab(key)}
+            >
+              <Icon size={15} color={on ? '#fff' : C.text2} />
+              <Text style={[{ fontSize: 15 }, S.semibold, on ? S.textWhite : S.text2]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
       <TextInput style={[S.bgSurface, S.border, S.roundedFull, S.px4, { paddingVertical: 10 }, S.textSm, S.text, S.mb3]} placeholder="搜索韩文或中文关键词..." placeholderTextColor={C.text3} value={searchQuery} onChangeText={setSearch} autoCorrect={false} />
       {currentTab !== 'grammar' && (
@@ -138,7 +135,15 @@ export default function LibraryScreen() {
           ))}
         </View>
       )}
-      {currentTab === 'words' ? (
+      {currentTab === 'words' && words.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+          <View style={[{ width: 88, height: 88, borderRadius: 44 }, S.bgAccent15, S.center, { marginBottom: 20 }]}>
+            <BookOpen size={38} color={C.accent} />
+          </View>
+          <Text style={[{ fontSize: 18 }, S.bold, S.text, { marginBottom: 8 }]}>还没有生词</Text>
+          <Text style={[{ fontSize: 14, textAlign: 'center', lineHeight: 22 }, S.text3]}>在口语对话或精听中点击任意单词，即可一键收藏到这里复习。</Text>
+        </View>
+      ) : currentTab === 'words' ? (
         <FlatList data={Object.entries(SECTIONS)} keyExtractor={([k]) => k} renderItem={({ item: [key, section] }) => {
           const sw = grouped[key] || [];
           if (!sw.length) return null;
@@ -165,7 +170,15 @@ export default function LibraryScreen() {
               <Text style={[S.textXs, S.text3]}>{item.source}</Text>
             </View>
           </View>
-        )} ListEmptyComponent={<Text style={[S.textCenter, S.text3, { paddingVertical: 40 }]}>暂无收藏句子</Text>} />
+        )} ListEmptyComponent={
+          <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+            <View style={[{ width: 88, height: 88, borderRadius: 44 }, S.bgAccent15, S.center, { marginBottom: 20 }]}>
+              <Star size={38} color={C.accent} />
+            </View>
+            <Text style={[{ fontSize: 18 }, S.bold, S.text, { marginBottom: 8 }]}>还没有收藏句子</Text>
+            <Text style={[{ fontSize: 14, textAlign: 'center', lineHeight: 22 }, S.text3]}>在口语对话或精听中长按句子即可收藏。</Text>
+          </View>
+        } />
       ) : currentTab === 'grammar' ? (
         <FlatList
           data={grammarPoints.filter(g => currentFilter === 'all' || g.level === currentFilter)}
@@ -190,7 +203,15 @@ export default function LibraryScreen() {
               </View>
             </TouchableOpacity>
           )}
-          ListEmptyComponent={<Text style={[S.textCenter, S.text3, { paddingVertical: 40 }]}>暂无语法收藏，在精听回声页面点击语法旁边的 ⭐ 即可收藏</Text>}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 40 }}>
+              <View style={[{ width: 88, height: 88, borderRadius: 44 }, S.bgAccent15, S.center, { marginBottom: 20 }]}>
+                <GraduationCap size={38} color={C.accent} />
+              </View>
+              <Text style={[{ fontSize: 18 }, S.bold, S.text, { marginBottom: 8 }]}>还没有语法收藏</Text>
+              <Text style={[{ fontSize: 14, textAlign: 'center', lineHeight: 22 }, S.text3]}>在精听回声页面点击语法旁边的 ⭐ 即可收藏。</Text>
+            </View>
+          }
         />
       ) : null}
       {/* ═══ Grammar Detail Modal ═══ */}

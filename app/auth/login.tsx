@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { C, S } from '../../utils/theme';
@@ -44,12 +44,14 @@ export default function LoginScreen() {
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
       <KeyboardAvoidingView style={S.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[S.flex1, S.center, S.px5]}>
-          <Text style={[{ fontSize: 48 }, S.mb2]}>🇰🇷</Text>
-          <Text style={[S.text2xl, S.bold, S.text, S.mb1]}>K-lingo</Text>
-          <Text style={[S.textSm, S.text3, S.mb4]}>首次自动注册，之后直接登录</Text>
+          <View style={{ marginBottom: 18, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 }}>
+            <Image source={require('../../assets/icon.png')} style={{ width: 76, height: 76, borderRadius: 18 }} />
+          </View>
+          <Text style={[{ fontSize: 30, fontWeight: '700', letterSpacing: -0.5 }, S.text, { marginBottom: 8 }]}>K-lingo</Text>
+          <Text style={[{ fontSize: 15 }, S.text3, { marginBottom: 32 }]}>首次自动注册，之后直接登录</Text>
 
           <TextInput
-            style={[S.bgSurface, S.border, S.roundedCard, S.px4, S.py3, S.textSm, S.text, { width: '100%' }, S.mb3]}
+            style={[S.bgSurface, S.border, S.roundedCard, S.px4, S.text, { width: '100%', height: 54, fontSize: 16, marginBottom: 14 }]}
             placeholder="邮箱"
             placeholderTextColor={C.text3}
             value={email}
@@ -58,7 +60,7 @@ export default function LoginScreen() {
             autoCapitalize="none"
           />
           <TextInput
-            style={[S.bgSurface, S.border, S.roundedCard, S.px4, S.py3, S.textSm, S.text, { width: '100%' }, S.mb4]}
+            style={[S.bgSurface, S.border, S.roundedCard, S.px4, S.text, { width: '100%', height: 54, fontSize: 16, marginBottom: 24 }]}
             placeholder="密码（至少 6 位）"
             placeholderTextColor={C.text3}
             value={password}
@@ -67,15 +69,15 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity
-            style={[S.bgAccent, S.roundedFull, { width: '100%', paddingVertical: 14 }, S.itemsCenter, S.mb3]}
+            style={[S.bgAccent, S.roundedFull, { width: '100%', height: 56 }, S.center, { shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 }]}
             onPress={handleSubmit}
             disabled={loading}
           >
-            <Text style={[S.textWhite, S.semibold, S.textBase]}>{loading ? '请稍候...' : '登录'}</Text>
+            <Text style={[S.textWhite, S.semibold, { fontSize: 17 }]}>{loading ? '请稍候...' : '登录'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={S.mt5} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] })}>
-            <Text style={[S.textXs, S.text3]}>跳过，本地使用</Text>
+          <TouchableOpacity style={{ marginTop: 28 }} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] })}>
+            <Text style={[{ fontSize: 14 }, S.text3]}>跳过，本地使用</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

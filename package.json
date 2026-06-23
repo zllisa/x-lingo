@@ -41,9 +41,12 @@
   },
   "scripts": {
     "start": "react-native start",
+    "start:clean": "react-native start --reset-cache",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
-    "reset": "bash scripts/clear-metro.sh"
+    "reset": "bash scripts/clear-metro.sh",
+    "clean": "npx react-native clean",
+    "clean:ios": "cd ios && rm -rf Pods Podfile.lock build && pod install --repo-update && cd .."
   },
   "overrides": {
     "react": "19.2.3",
