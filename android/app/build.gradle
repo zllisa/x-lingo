@@ -85,9 +85,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.aalisa.klingo"
+    namespace "com.aalisa.xlingo"
     defaultConfig {
-        applicationId "com.aalisa.klingo"
+        applicationId "com.aalisa.xlingo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

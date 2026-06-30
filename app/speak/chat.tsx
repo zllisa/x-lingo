@@ -212,7 +212,7 @@ export default function ChatScreen() {
       console.warn('startRecording error:', msg);
       recordingPath.current = null;
       if (msg.includes('perm') || msg.includes('auth') || msg.includes('denied')) {
-        Alert.alert('麦克风未授权', '请到 设置 > 隐私与安全性 > 麦克风 中允许 K-lingo');
+        Alert.alert('麦克风未授权', '请到 设置 > 隐私与安全性 > 麦克风 中允许 x-lingo');
       } else {
         Alert.alert('录音失败', msg);
       }

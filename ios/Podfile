@@ -13,7 +13,7 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
-target 'korean-ai-bot' do
+target 'xlingo' do
   config = use_native_modules!
 
   use_react_native!(

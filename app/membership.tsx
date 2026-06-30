@@ -38,7 +38,7 @@ export default function MembershipScreen() {
           </View>
           <View style={{ marginTop: 10 }}>
             <Crown size={36} color="#ffd86b" style={{ marginBottom: 10 }} />
-            <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>K-lingo Pro</Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>x-lingo Pro</Text>
             <Text style={{ fontSize: 14.5, color: 'rgba(255,255,255,0.92)', marginTop: 8, lineHeight: 22 }}>
               解锁全部场景、无限陪练与精听，{'\n'}把韩语真正练到能用。
             </Text>
@@ -92,7 +92,7 @@ export default function MembershipScreen() {
                     : { borderColor: C.border, backgroundColor: C.surface },
                 ]}
                 activeOpacity={0.7}
-                onPress={() => Alert.alert('K-lingo Pro', '内购功能即将上线，敬请期待！')}
+                onPress={() => Alert.alert('x-lingo Pro', '内购功能即将上线，敬请期待！')}
               >
                 {plan.recommended && (
                   <View style={{ position: 'absolute', top: -9, left: 16, backgroundColor: C.accent, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 9999 }}>
@@ -118,7 +118,7 @@ export default function MembershipScreen() {
           {/* CTA */}
           <TouchableOpacity
             style={[S.bgAccent, S.roundedFull, { height: 56, alignItems: 'center', justifyContent: 'center', shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 }]}
-            onPress={() => Alert.alert('K-lingo Pro', '内购功能即将上线，敬请期待！')}
+            onPress={() => Alert.alert('x-lingo Pro', '内购功能即将上线，敬请期待！')}
             activeOpacity={0.85}
           >
             <Text style={[{ fontSize: 17, fontWeight: '700' }, S.textWhite]}>立即开通 · ¥168/年</Text>

@@ -68,7 +68,7 @@ export default function ProfileScreen() {
         words, sentences,
         exportedAt: new Date().toISOString(),
       }, null, 2);
-      const path = DocumentDirectoryPath + '/klingo_backup.json';
+      const path = DocumentDirectoryPath + '/xlingo_backup.json';
       await writeFile(path, data, 'utf8');
       await Share.open({ url: 'file://' + path, type: 'application/json' });
     } catch (e: any) {
@@ -121,7 +121,7 @@ export default function ProfileScreen() {
           <View style={{ position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.10)', top: -60, right: -40 }} />
           <View style={[S.flexRow, S.itemsCenter, { gap: 8, marginBottom: 8 }]}>
             <Crown size={20} color="#ffd86b" />
-            <Text style={[{ fontSize: 18 }, S.bold, S.textWhite]}>K-lingo Pro</Text>
+            <Text style={[{ fontSize: 18 }, S.bold, S.textWhite]}>x-lingo Pro</Text>
           </View>
           <Text style={[{ fontSize: 13.5, lineHeight: 22, marginBottom: 14, color: 'rgba(255,255,255,0.92)' }]}>
             无限 AI 对话 · 精听不限时长 · 全部场景与等级解锁

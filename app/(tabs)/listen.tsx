@@ -66,7 +66,7 @@ export default function ListenScreen() {
           buttonNegative: '拒绝',
         });
         if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('需要相册权限', '请在 设置 > 应用权限 中允许 K-lingo 访问相册。', [
+          Alert.alert('需要相册权限', '请在 设置 > 应用权限 中允许 x-lingo 访问相册。', [
             { text: '取消', style: 'cancel' },
             { text: '去设置', onPress: () => Linking.openSettings() },
           ]);

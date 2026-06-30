@@ -47,7 +47,7 @@ export default function LoginScreen() {
           <View style={{ marginBottom: 18, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 }}>
             <Image source={require('../../assets/icon.png')} style={{ width: 76, height: 76, borderRadius: 18 }} />
           </View>
-          <Text style={[{ fontSize: 30, fontWeight: '700', letterSpacing: -0.5 }, S.text, { marginBottom: 8 }]}>K-lingo</Text>
+          <Text style={[{ fontSize: 30, fontWeight: '700', letterSpacing: -0.5 }, S.text, { marginBottom: 8 }]}>x-lingo</Text>
           <Text style={[{ fontSize: 15 }, S.text3, { marginBottom: 32 }]}>首次自动注册，之后直接登录</Text>
 
           <TextInput
