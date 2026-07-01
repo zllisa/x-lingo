@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { downloadFile, CachesDirectoryPath } from '@dr.pogodin/react-native-fs';
+import { CachesDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
 import {
   QINIU_ACCESS_KEY, QINIU_SECRET_KEY, QINIU_BUCKET,
   QINIU_DOMAIN, QINIU_ZONE,
@@ -61,18 +61,28 @@ export async function uploadToQiniu(fileUri: string): Promise<string> {
   formData.append('key', key);
   formData.append('file', { uri: fileUri, type: 'video/mp4', name: 'upload.mp4' } as any);
 
-  console.log('[Qiniu] Upload to', uploadHost(), 'key:', key);
-  const resp = await fetch(uploadHost(), { method: 'POST', body: formData });
-  const text = await resp.text();
-  console.log('[Qiniu] Upload resp', resp.status, text.substring(0, 200));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min
 
-  let result: any = {};
-  try { result = JSON.parse(text); } catch {}
+  console.log('[Qiniu] Upload to', uploadHost(), 'key:', key, 'uri:', fileUri.substring(0, 80));
+  try {
+    const resp = await fetch(uploadHost(), { method: 'POST', body: formData, signal: controller.signal });
+    const text = await resp.text();
+    console.log('[Qiniu] Upload resp', resp.status, text.substring(0, 200));
 
-  if (!resp.ok || result.error) {
-    throw new Error(`Qiniu upload: ${resp.status} ${text.substring(0, 200)}`);
+    let result: any = {};
+    try { result = JSON.parse(text); } catch {}
+
+    if (!resp.ok || result.error) {
+      throw new Error(`Qiniu upload: ${resp.status} ${text.substring(0, 200)}`);
+    }
+    return result.key || key;
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('上传超时（10分钟），请检查网络或视频大小');
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return result.key || key;
 }
 
 // ── pfop ──
@@ -89,22 +99,33 @@ async function triggerTranscode(key: string): Promise<string> {
     fops: `avthumb/wav/acodec/pcm_s16le/ar/16000/ac/1|saveas/${saveas}`,
   }).toString();
 
-  const resp = await fetch('https://api.qiniu.com/pfop/', {
-    method: 'POST',
-    headers: {
-      Authorization: getManagementToken('POST', '/pfop/', body),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-  const text = await resp.text();
-  console.log('[Qiniu] Pfop resp', resp.status, text.substring(0, 200));
-  const result = JSON.parse(text);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30 * 1000); // 30s
 
-  if (!resp.ok || result.error) {
-    throw new Error(`Qiniu pfop: ${resp.status} ${text.substring(0, 200)}`);
+  try {
+    const resp = await fetch('https://api.qiniu.com/pfop/', {
+      method: 'POST',
+      headers: {
+        Authorization: getManagementToken('POST', '/pfop/', body),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+      signal: controller.signal,
+    });
+    const text = await resp.text();
+    console.log('[Qiniu] Pfop resp', resp.status, text.substring(0, 200));
+    const result = JSON.parse(text);
+
+    if (!resp.ok || result.error) {
+      throw new Error(`Qiniu pfop: ${resp.status} ${text.substring(0, 200)}`);
+    }
+    return result.persistentId;
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('触发转码超时，请重试');
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return result.persistentId;
 }
 
 async function waitForTranscode(persistentId: string): Promise<string> {
@@ -132,7 +153,10 @@ async function waitForTranscode(persistentId: string): Promise<string> {
 // ── public ──
 
 /**
- * Download a Qiniu audio URL to the local cache via RNFS (native downloader).
+ * Download a Qiniu audio URL to the local cache.
+ * Uses fetch + writeFile instead of RNFS.downloadFile because the latter's
+ * native streaming promise triggers an EXC_BAD_ACCESS crash in Hermes when
+ * called from the player page (FlatList rendering + state polling overhead).
  * Returns a file:// URI. Reused both during extraction and later when the
  * cached file has been purged and must be re-fetched for playback.
  */
@@ -140,14 +164,72 @@ export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
   const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.wav`;
 
   console.log('[Qiniu] Downloading', downloadUrl, '→', localPath);
-  const dl = downloadFile({ fromUrl: downloadUrl, toFile: localPath });
-  const result = await dl.promise;
-  console.log('[Qiniu] Downloaded', result.bytesWritten, 'bytes, status:', result.statusCode);
 
-  if (result.statusCode !== 200) {
-    throw new Error(`Qiniu download: HTTP ${result.statusCode}`);
+  // Pure-JS fetch — no native streaming promise, no Hermes bug.
+  const resp = await fetch(downloadUrl);
+  console.log('[Qiniu] Fetch status', resp.status);
+  if (!resp.ok) throw new Error(`Qiniu download: HTTP ${resp.status}`);
+
+  const buffer = await resp.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  console.log('[Qiniu] Downloaded', bytes.length, 'bytes');
+
+  if (bytes.length < 200) {
+    throw new Error(`Qiniu download: 文件过小 (${bytes.length} 字节)`);
   }
+
+  // Convert to base64 in chunks to avoid stack overflow in Hermes.
+  // CHUNK MUST be a multiple of 3: base64 encodes 3 bytes → 4 chars, so a
+  // chunk whose length isn't divisible by 3 makes btoa() emit '=' padding at
+  // the chunk boundary. Concatenating those padded chunks yields malformed
+  // base64 (interior '='), which the native writeFile decoder truncates/
+  // misaligns — the WAV then plays as constant static. 0x8000 (32768) is NOT
+  // a multiple of 3; 0xC000 (49152 = 3×16384) is.
+  const CHUNK = 0xC000; // 48 KB, multiple of 3
+  let b64 = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, i + CHUNK);
+    let bin = '';
+    for (let j = 0; j < slice.length; j++) bin += String.fromCharCode(slice[j]);
+    b64 += btoa(bin);
+  }
+
+  await writeFile(localPath, b64, 'base64');
+  console.log('[Qiniu] Written to', localPath);
   return `file://${localPath}`;
+}
+
+/**
+ * Upload a video to Qiniu and immediately trigger transcoding, then return
+ * without waiting for the transcode to finish. The caller should store the
+ * returned transcodeId and later call resumeTranscodeAudio() to get the WAV.
+ */
+export async function uploadAndTriggerTranscode(videoUri: string): Promise<{ transcodeId: string }> {
+  const key = await uploadToQiniu(videoUri);
+  const transcodeId = await triggerTranscode(key);
+  return { transcodeId };
+}
+
+/**
+ * Poll Qiniu until an already-started transcode job completes, then download
+ * the resulting WAV. Used when transcodeId was stored at upload time.
+ */
+export async function resumeTranscodeAudio(transcodeId: string): Promise<{ uri: string; remoteUrl: string }> {
+  const outputKey = await waitForTranscode(transcodeId);
+  const remoteUrl = `${QINIU_DOMAIN}/${outputKey}`;
+  const uri = await downloadQiniuAudio(remoteUrl);
+  return { uri, remoteUrl };
+}
+
+/**
+ * Like resumeTranscodeAudio, but returns ONLY the remote WAV URL without
+ * downloading it to the device. Used by the Azure Batch STT path, which pulls
+ * the audio server-side from this URL — so the phone never has to download the
+ * WAV just to transcribe it.
+ */
+export async function resumeTranscodeUrl(transcodeId: string): Promise<string> {
+  const outputKey = await waitForTranscode(transcodeId);
+  return `${QINIU_DOMAIN}/${outputKey}`;
 }
 
 /**

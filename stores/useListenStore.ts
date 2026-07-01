@@ -26,6 +26,8 @@ interface ListenStore {
   setTranscript: (fileId: string, items: TranscriptItem[]) => void;
   setExplain: (fileId: string, sentenceIdx: number, explain: NonNullable<TranscriptItem['explain']>) => void;
   setRemoteAudioUrl: (fileId: string, url: string) => void;
+  setLocalAudioUri: (fileId: string, uri: string) => void;
+  setTranscodeId: (fileId: string, transcodeId: string) => void;
 }
 
 export const useListenStore = create<ListenStore>()(
@@ -72,6 +74,14 @@ export const useListenStore = create<ListenStore>()(
         set((s) => ({
           audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, remoteAudioUrl: url } : f)),
         })),
+      setLocalAudioUri: (fileId, uri) =>
+        set((s) => ({
+          audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, localAudioUri: uri } : f)),
+        })),
+      setTranscodeId: (fileId, transcodeId) =>
+        set((s) => ({
+          audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, transcodeId } : f)),
+        })),
       setExplain: (fileId, sentenceIdx, explain) =>
         set((s) => {
           const items = [...(s.transcripts[fileId] || [])];
@@ -83,7 +93,7 @@ export const useListenStore = create<ListenStore>()(
     }),
     {
       name: 'listen-store',
-      version: 2,
+      version: 3,
       migrate: () => ({ audioFiles: [], transcripts: {}, playerSpeed: 1, showTranslation: false }),
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },

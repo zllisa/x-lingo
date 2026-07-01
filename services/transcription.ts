@@ -1,9 +1,11 @@
 import { whisperSTTWithTimestamps, type WhisperSegment } from './whisperSTT';
 // Azure STT 保留备用 — import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
+import { azureBatchTranscribe } from './azureBatchSTT';
 import { deepSeekTranslate, deepSeekTranslateBatch } from './deepseek';
-import { qiniuExtractAudio, qiniuEnabled } from './qiniu';
+import { qiniuExtractAudio, qiniuEnabled, resumeTranscodeAudio, resumeTranscodeUrl } from './qiniu';
 import { extractAudio } from './AudioExtractor';
 import { stat } from '@dr.pogodin/react-native-fs';
+import { STT_PROVIDER } from '../constants/api';
 import type { TranscriptItem } from '../types';
 
 function formatTime(seconds: number): string {
@@ -51,13 +53,33 @@ async function canSendVideoDirect(fileUri: string): Promise<boolean> {
 export async function transcribeFile(
   fileUri: string,
   onProgress?: (message: string) => void,
-): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string }> {
+  transcodeId?: string,
+): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string; localAudioUri?: string }> {
   let audioUri = fileUri;
   let remoteAudioUrl: string | undefined;
+  // Azure Batch transcribes straight from the Qiniu URL — no local WAV needed.
+  const useAzure = STT_PROVIDER === 'azure';
 
-  if (isVideo(fileUri)) {
-    if (await canSendVideoDirect(fileUri)) {
-      // Send video directly — Groq Whisper handles audio demuxing server-side
+  if (transcodeId) {
+    // Transcode was triggered at upload time — just poll for completion.
+    onProgress?.('正在等待云端转码完成...');
+    if (useAzure) {
+      remoteAudioUrl = await resumeTranscodeUrl(transcodeId);
+      // Also download the WAV locally during transcription — avoids the
+      // RNFS.downloadFile native promise crash on the player page later.
+      // The player can then load from the local file directly.
+      onProgress?.('正在缓存音频文件...');
+      const { downloadQiniuAudio } = await import('./qiniu');
+      audioUri = await downloadQiniuAudio(remoteAudioUrl);
+    } else {
+      const q = await resumeTranscodeAudio(transcodeId);
+      audioUri = q.uri;
+      remoteAudioUrl = q.remoteUrl;
+    }
+  } else if (isVideo(fileUri)) {
+    // Groq can demux small video containers directly; Azure cannot, so under
+    // Azure we always route video through Qiniu to obtain a WAV URL.
+    if (!useAzure && await canSendVideoDirect(fileUri)) {
       onProgress?.('正在识别语音 (Groq Whisper 直接处理视频)...');
       console.log('[Transcription] Sending video directly to Groq Whisper:', fileUri);
     } else if (qiniuEnabled()) {
@@ -71,14 +93,19 @@ export async function transcribeFile(
     }
   }
 
-  // ── STT: Groq Whisper verbose_json → 词级时间戳分句 ──
-  if (audioUri === fileUri && isVideo(fileUri)) {
-    // Already showing "直接处理视频" progress
+  // ── STT ── Azure Batch when we have a remote URL; otherwise Groq Whisper.
+  let rawSegments: WhisperSegment[];
+  if (useAzure && remoteAudioUrl) {
+    onProgress?.('正在识别语音 (Azure 云端识别)...');
+    console.log('[Transcription] Azure Batch STT from', remoteAudioUrl);
+    rawSegments = await azureBatchTranscribe(remoteAudioUrl, onProgress);
   } else {
-    onProgress?.('正在识别语音 (Groq Whisper)...');
+    if (!(audioUri === fileUri && isVideo(fileUri))) {
+      onProgress?.('正在识别语音 (Groq Whisper)...');
+    }
+    console.log('[Transcription] Groq STT audioUri:', audioUri);
+    rawSegments = await whisperSTTWithTimestamps(audioUri);
   }
-  console.log('[Transcription] STT audioUri:', audioUri);
-  const rawSegments = await whisperSTTWithTimestamps(audioUri);
 
   if (!rawSegments.length) {
     throw new Error('没有识别到任何语音内容');
@@ -91,8 +118,7 @@ export async function transcribeFile(
     text: s.text,
   }));
 
-  console.log('[Transcription] Whisper returned', segments.length, 'segments:');
-  segments.forEach((s, i) => console.log(`[Transcription]   [${i}] ${s.start.toFixed(1)}s-${s.end.toFixed(1)}s "${s.text}"`));
+  console.log('[Transcription] STT returned', segments.length, 'segments');
 
   // DeepSeek already provides properly split sentences — no merging needed.
   // Proportional timestamps have contiguous boundaries, so any merge logic
@@ -131,5 +157,6 @@ export async function transcribeFile(
     onProgress?.(`进度: ${Math.min(i + BATCH_SIZE, segments.length)} / ${segments.length}`);
   }
 
-  return { items: results, remoteAudioUrl };
+  const localAudioUri = audioUri !== fileUri ? audioUri : undefined;
+  return { items: results, remoteAudioUrl, localAudioUri };
 }

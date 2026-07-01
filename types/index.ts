@@ -60,9 +60,12 @@ export interface AudioFile {
   date: string;
   icon: string;
   uri?: string;
-  // Durable Qiniu URL of the extracted audio. Used to re-download and play
-  // when the local cache file has been purged by iOS.
   remoteAudioUrl?: string;
+  // Local cache of the extracted WAV (downloaded during transcription).
+  // When present and the file still exists on disk, the player loads from
+  // this path directly — no Qiniu download needed at play time.
+  localAudioUri?: string;
+  transcodeId?: string;
 }
 
 export interface TranscriptItem {

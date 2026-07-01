@@ -1,0 +1,431 @@
+2026-06-30 10:37:41 +0000  Initial pipeline context: <IDEDistributionProcessingPipelineContext: 0x702e23c00; archive(resolved)="<IDEArchive: 0x709e21ea0>", distributionTask(resolved)="2", distributionDestination(resolved)="1", distributionMethod(resolved)="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team(resolved)="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	Chain (16, self inclusive):
+	<IDEDistributionProcessingPipelineContext: 0x702e23c00; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionProcessingPipelineContext: 0x702e23600; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702aa7c00; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702a39b80; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702aba300; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702aba580; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702ab9900; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702ab8f00; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702ab9180; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="<IDEProvisioningDisambiguatableBasicTeam: 0x7171550c0; teamID='3XJP2YR5UD', teamName='Shanghai Wanxiang blockchain Inc.', teamType='Company', username='developer@wxblockchain.com', isFreeProvisioningTeam='0'>">
+	<IDEDistributionContext: 0x702ab9400; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="(null)">
+	<IDEDistributionContext: 0x702abaa80; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="(null)">
+	<IDEDistributionContext: 0x702ab8500; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="(null)">
+	<IDEDistributionContext: 0x702abb700; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="<IDEDistributionMethodDevelopmentSigned: 0x71c829d00>", team="(null)">
+	<IDEDistributionContext: 0x702abb980; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="(null)", team="(null)">
+	<IDEDistributionContext: 0x6fc4c5180; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="(null)", team="(null)">
+	<IDEDistributionContext: 0x708e3c500; archive = "<IDEArchive: 0x709e21ea0>", distributionMethod="(null)", team="(null)">
+</IDEDistributionProcessingPipelineContext: 0x702e23c00>
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionCreateDestRootStep
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionCopyItemStep
+2026-06-30 10:37:41 +0000  Running /usr/bin/ditto '-V' '/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app' '/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app'
+2026-06-30 10:37:41 +0000  >>> Copying /Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app 
+2026-06-30 10:37:41 +0000  copying file ./_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  17287 bytes for ./_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./RNImagePickerPrivacyInfo.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  905 bytes for ./RNImagePickerPrivacyInfo.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./RNImagePickerPrivacyInfo.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  794 bytes for ./RNImagePickerPrivacyInfo.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./RNFS_PrivacyInfo.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  840 bytes for ./RNFS_PrivacyInfo.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./RNFS_PrivacyInfo.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  780 bytes for ./RNFS_PrivacyInfo.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./AppIcon60x60@2x.png ... 
+2026-06-30 10:37:41 +0000  6905 bytes for ./AppIcon60x60@2x.png
+2026-06-30 10:37:41 +0000  copying file ./React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  552 bytes for ./React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./React-cxxreact_privacy.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  792 bytes for ./React-cxxreact_privacy.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Assets.car ... 
+2026-06-30 10:37:41 +0000  258680 bytes for ./Assets.car
+2026-06-30 10:37:41 +0000  copying file ./AppIcon76x76@2x~ipad.png ... 
+2026-06-30 10:37:41 +0000  10016 bytes for ./AppIcon76x76@2x~ipad.png
+2026-06-30 10:37:41 +0000  copying file ./main.jsbundle ... 
+2026-06-30 10:37:41 +0000  6331639 bytes for ./main.jsbundle
+2026-06-30 10:37:41 +0000  copying file ./PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  501 bytes for ./PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib ... 
+2026-06-30 10:37:41 +0000  3815 bytes for ./LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib
+2026-06-30 10:37:41 +0000  copying file ./LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib ... 
+2026-06-30 10:37:41 +0000  924 bytes for ./LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib
+2026-06-30 10:37:41 +0000  copying file ./LaunchScreen.storyboardc/Info.plist ... 
+2026-06-30 10:37:41 +0000  258 bytes for ./LaunchScreen.storyboardc/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./RNSVGFilters.bundle/RNSVGArithmeticFilter.iphoneos.metallib ... 
+2026-06-30 10:37:41 +0000  3993 bytes for ./RNSVGFilters.bundle/RNSVGArithmeticFilter.iphoneos.metallib
+2026-06-30 10:37:41 +0000  copying file ./RNSVGFilters.bundle/RNSVGCompositeXor.iphoneos.metallib ... 
+2026-06-30 10:37:41 +0000  3509 bytes for ./RNSVGFilters.bundle/RNSVGCompositeXor.iphoneos.metallib
+2026-06-30 10:37:41 +0000  copying file ./RNSVGFilters.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  771 bytes for ./RNSVGFilters.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/hermesvm.framework/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  1798 bytes for ./Frameworks/hermesvm.framework/_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/hermesvm.framework/hermesvm ... 
+2026-06-30 10:37:41 +0000  6985904 bytes for ./Frameworks/hermesvm.framework/hermesvm
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/hermesvm.framework/Info.plist ... 
+859 bytes for ./Frameworks/hermesvm.framework/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/React.framework/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  1798 bytes for ./Frameworks/React.framework/_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/React.framework/React ... 
+2026-06-30 10:37:41 +0000  11812400 bytes for ./Frameworks/React.framework/React
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/React.framework/Info.plist ... 
+2026-06-30 10:37:41 +0000  744 bytes for ./Frameworks/React.framework/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  3548 bytes for ./Frameworks/ReactNativeDependencies.framework/_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  552 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  689 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies ... 
+2026-06-30 10:37:41 +0000  1263760 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  552 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  687 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  776 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  689 bytes for ./Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Frameworks/ReactNativeDependencies.framework/Info.plist ... 
+2026-06-30 10:37:41 +0000  781 bytes for ./Frameworks/ReactNativeDependencies.framework/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./embedded.mobileprovision ... 
+2026-06-30 10:37:41 +0000  25544 bytes for ./embedded.mobileprovision
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@3x.png ... 
+2026-06-30 10:37:41 +0000  761 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@3x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@2x.png ... 
+2026-06-30 10:37:41 +0000  405 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@2x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@2x.png ... 
+2026-06-30 10:37:41 +0000  589 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@2x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@3x.png ... 
+2026-06-30 10:37:41 +0000  502 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@3x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon.png ... 
+2026-06-30 10:37:41 +0000  290 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@2x.png ... 
+2026-06-30 10:37:41 +0000  334 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@2x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@3x.png ... 
+2026-06-30 10:37:41 +0000  839 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@3x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon.png ... 
+2026-06-30 10:37:41 +0000  141 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.png ... 
+2026-06-30 10:37:41 +0000  653 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@2x.png ... 
+2026-06-30 10:37:41 +0000  201 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@2x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@3x.png ... 
+2026-06-30 10:37:41 +0000  266 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@3x.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon.png ... 
+2026-06-30 10:37:41 +0000  220 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon.png
+2026-06-30 10:37:41 +0000  copying file ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon.png ... 
+2026-06-30 10:37:41 +0000  317 bytes for ./assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon.png
+2026-06-30 10:37:41 +0000  copying file ./assets/assets/icon.png ... 
+2026-06-30 10:37:41 +0000  110123 bytes for ./assets/assets/icon.png
+2026-06-30 10:37:41 +0000  copying file ./xlingo ... 
+2026-06-30 10:37:41 +0000  4113056 bytes for ./xlingo
+2026-06-30 10:37:41 +0000  copying file ./Info.plist ... 
+2026-06-30 10:37:41 +0000  1710 bytes for ./Info.plist
+2026-06-30 10:37:41 +0000  copying file ./RNCAsyncStorage_resources.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  512 bytes for ./RNCAsyncStorage_resources.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./RNCAsyncStorage_resources.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  797 bytes for ./RNCAsyncStorage_resources.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./PkgInfo ... 
+2026-06-30 10:37:41 +0000  8 bytes for ./PkgInfo
+2026-06-30 10:37:41 +0000  copying file ./React-Core_privacy.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  768 bytes for ./React-Core_privacy.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./React-Core_privacy.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  784 bytes for ./React-Core_privacy.bundle/Info.plist
+2026-06-30 10:37:41 +0000  /usr/bin/ditto exited with 0
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionEmbedProfileStep
+2026-06-30 10:37:41 +0000  Skipping profile for item: <IDEDistributionItem: 0x71eae8a20; bundleID='react-native.React', path='<DVTFilePath:0x71e9b19e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae88a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='react-native.React', executablePath='<DVTFilePath:0x71e9b1ce0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework/React'>', hardenedRuntime='0'>'>
+2026-06-30 10:37:41 +0000  Skipping profile for item: <IDEDistributionItem: 0x71eae8ae0; bundleID='third-party.ReactNativeDependencies', path='<DVTFilePath:0x71e989e00:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8a80; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='third-party.ReactNativeDependencies', executablePath='<DVTFilePath:0x709de4070:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies'>', hardenedRuntime='0'>'>
+2026-06-30 10:37:41 +0000  Skipping profile for item: <IDEDistributionItem: 0x71eae8240; bundleID='dev.hermesengine.iphoneos', path='<DVTFilePath:0x709de5b90:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae82a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='dev.hermesengine.iphoneos', executablePath='<DVTFilePath:0x71e9b1860:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework/hermesvm'>', hardenedRuntime='0'>'>
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionInfoPlistStep
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionInfoPlistStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionInfoPlistStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionInfoPlistStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionInfoPlistStep because it said so
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionAppThinningPlistStep
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionAppThinningPlistStep because it said so
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionSymbolsStep
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionSymbolsStep because it said so
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionAppThinningStep
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionAppThinningStep because it said so
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionArchThinningStep
+2026-06-30 10:37:41 +0000  Archs to thin for item /Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework are []
+2026-06-30 10:37:41 +0000  Archs to thin for item /Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework are []
+2026-06-30 10:37:41 +0000  Archs to thin for item /Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework are []
+2026-06-30 10:37:41 +0000  Archs to thin for item /Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app are []
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionODRStep
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionStripXattrsStep
+2026-06-30 10:37:41 +0000  Skipping stripping extended attributes because the codesign step will strip them.
+2026-06-30 10:37:41 +0000  Skipping stripping extended attributes because the codesign step will strip them.
+2026-06-30 10:37:41 +0000  Skipping stripping extended attributes because the codesign step will strip them.
+2026-06-30 10:37:41 +0000  Skipping stripping extended attributes because the codesign step will strip them.
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionCodesignStep
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8a20; bundleID='react-native.React', path='<DVTFilePath:0x71e9b19e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae88a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='react-native.React', executablePath='<DVTFilePath:0x71e9b1ce0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework/React'>', hardenedRuntime='0'>'>: {
+}
+2026-06-30 10:37:41 +0000  Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8a20; bundleID='react-native.React', path='<DVTFilePath:0x71e9b19e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae88a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='react-native.React', executablePath='<DVTFilePath:0x71e9b1ce0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework/React'>', hardenedRuntime='0'>'> are: {
+}
+2026-06-30 10:37:41 +0000  Writing entitlements for <IDEDistributionItem: 0x71eae8a20; bundleID='react-native.React', path='<DVTFilePath:0x71e9b19e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae88a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='react-native.React', executablePath='<DVTFilePath:0x71e9b1ce0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/React.framework/React'>', hardenedRuntime='0'>'> to: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~xicN3x
+2026-06-30 10:37:41 +0000  invoking codesign: <NSConcreteTask: 0x702ed77a0; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    22A93882E51DC2280D621B358CE18BCF441CFC4F,
+    "--entitlements",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~xicN3x",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/React.framework"
+)'>
+2026-06-30 10:37:41 +0000  codesign output: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/React.framework: replacing existing signature
+/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/React.framework: signed bundle with Mach-O thin (arm64) [react-native.React]
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8ae0; bundleID='third-party.ReactNativeDependencies', path='<DVTFilePath:0x71e989e00:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8a80; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='third-party.ReactNativeDependencies', executablePath='<DVTFilePath:0x709de4070:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies'>', hardenedRuntime='0'>'>: {
+}
+2026-06-30 10:37:41 +0000  Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8ae0; bundleID='third-party.ReactNativeDependencies', path='<DVTFilePath:0x71e989e00:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8a80; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='third-party.ReactNativeDependencies', executablePath='<DVTFilePath:0x709de4070:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies'>', hardenedRuntime='0'>'> are: {
+}
+2026-06-30 10:37:41 +0000  Writing entitlements for <IDEDistributionItem: 0x71eae8ae0; bundleID='third-party.ReactNativeDependencies', path='<DVTFilePath:0x71e989e00:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8a80; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='third-party.ReactNativeDependencies', executablePath='<DVTFilePath:0x709de4070:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies'>', hardenedRuntime='0'>'> to: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~W3FHZU
+2026-06-30 10:37:41 +0000  invoking codesign: <NSConcreteTask: 0x702ed7de0; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    22A93882E51DC2280D621B358CE18BCF441CFC4F,
+    "--entitlements",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~W3FHZU",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework"
+)'>
+2026-06-30 10:37:41 +0000  codesign output: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework: replacing existing signature
+/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework: signed bundle with Mach-O thin (arm64) [third-party.ReactNativeDependencies]
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8240; bundleID='dev.hermesengine.iphoneos', path='<DVTFilePath:0x709de5b90:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae82a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='dev.hermesengine.iphoneos', executablePath='<DVTFilePath:0x71e9b1860:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework/hermesvm'>', hardenedRuntime='0'>'>: {
+}
+2026-06-30 10:37:41 +0000  Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8240; bundleID='dev.hermesengine.iphoneos', path='<DVTFilePath:0x709de5b90:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae82a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='dev.hermesengine.iphoneos', executablePath='<DVTFilePath:0x71e9b1860:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework/hermesvm'>', hardenedRuntime='0'>'> are: {
+}
+2026-06-30 10:37:41 +0000  Writing entitlements for <IDEDistributionItem: 0x71eae8240; bundleID='dev.hermesengine.iphoneos', path='<DVTFilePath:0x709de5b90:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae82a0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='(null)', teamID='3XJP2YR5UD', identifier='dev.hermesengine.iphoneos', executablePath='<DVTFilePath:0x71e9b1860:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/Frameworks/hermesvm.framework/hermesvm'>', hardenedRuntime='0'>'> to: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~K9yRhk
+2026-06-30 10:37:41 +0000  invoking codesign: <NSConcreteTask: 0x702cd0960; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    22A93882E51DC2280D621B358CE18BCF441CFC4F,
+    "--entitlements",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~K9yRhk",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/hermesvm.framework"
+)'>
+2026-06-30 10:37:41 +0000  codesign output: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/hermesvm.framework: replacing existing signature
+/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/hermesvm.framework: signed bundle with Mach-O thin (arm64) [dev.hermesengine.iphoneos]
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8ba0; bundleID='com.alisa.zhao.xlingo', path='<DVTFilePath:0x71e9b01e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8b40; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x70298e7c0; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='{
+    "application-identifier" = "3XJP2YR5UD.com.alisa.zhao.xlingo";
+    "com.apple.developer.team-identifier" = 3XJP2YR5UD;
+    "get-task-allow" = 1;
+}', teamID='3XJP2YR5UD', identifier='com.alisa.zhao.xlingo', executablePath='<DVTFilePath:0x71e967d20:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/xlingo'>', hardenedRuntime='0'>'>: {
+    "application-identifier" = "3XJP2YR5UD.com.alisa.zhao.xlingo";
+    "com.apple.developer.team-identifier" = 3XJP2YR5UD;
+    "get-task-allow" = 1;
+}
+2026-06-30 10:37:41 +0000  Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-06-30 10:37:41 +0000  Entitlements for <IDEDistributionItem: 0x71eae8ba0; bundleID='com.alisa.zhao.xlingo', path='<DVTFilePath:0x71e9b01e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8b40; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='{
+    "application-identifier" = "3XJP2YR5UD.com.alisa.zhao.xlingo";
+    "com.apple.developer.team-identifier" = 3XJP2YR5UD;
+    "get-task-allow" = 1;
+}', teamID='3XJP2YR5UD', identifier='com.alisa.zhao.xlingo', executablePath='<DVTFilePath:0x71e967d20:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/xlingo'>', hardenedRuntime='0'>'> are: {
+    "application-identifier" = "3XJP2YR5UD.com.alisa.zhao.xlingo";
+    "com.apple.developer.team-identifier" = 3XJP2YR5UD;
+    "get-task-allow" = 1;
+}
+2026-06-30 10:37:41 +0000  Writing entitlements for <IDEDistributionItem: 0x71eae8ba0; bundleID='com.alisa.zhao.xlingo', path='<DVTFilePath:0x71e9b01e0:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x71eae8b40; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x707637e40; name='Apple Development: Blockchain WanXiang (V7Q7FX75C5)', hash='22A93882E51DC2280D621B358CE18BCF441CFC4F', serialNumber='59F2F8C2FEB07A0EC201603416D4F471', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-06-03 07:49:46 +0000''>', entitlements='{
+    "application-identifier" = "3XJP2YR5UD.com.alisa.zhao.xlingo";
+    "com.apple.developer.team-identifier" = 3XJP2YR5UD;
+    "get-task-allow" = 1;
+}', teamID='3XJP2YR5UD', identifier='com.alisa.zhao.xlingo', executablePath='<DVTFilePath:0x71e967d20:'/Users/alisazhao/Library/Developer/Xcode/Archives/2026-06-30/xlingo 2026-6-30, 18.33.xcarchive/Products/Applications/xlingo.app/xlingo'>', hardenedRuntime='0'>'> to: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~R9vV4m
+2026-06-30 10:37:41 +0000  invoking codesign: <NSConcreteTask: 0x702ed7de0; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    22A93882E51DC2280D621B358CE18BCF441CFC4F,
+    "--entitlements",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/entitlements~~~R9vV4m",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app"
+)'>
+2026-06-30 10:37:41 +0000  codesign output: /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app: replacing existing signature
+/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app: signed app bundle with Mach-O thin (arm64) [com.alisa.zhao.xlingo]
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionZipODRItemStep
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-06-30 10:37:41 +0000  Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-06-30 10:37:41 +0000  Processing step: IDEDistributionCreateIPAStep
+2026-06-30 10:37:41 +0000  Running /usr/bin/ditto '-V' '-c' '-k' '--norsrc' '/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root' '/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Packages/xlingo.ipa'
+2026-06-30 10:37:41 +0000  >>> Copying /var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root 
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  17287 bytes for ./Payload/xlingo.app/_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNImagePickerPrivacyInfo.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  905 bytes for ./Payload/xlingo.app/RNImagePickerPrivacyInfo.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNImagePickerPrivacyInfo.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  794 bytes for ./Payload/xlingo.app/RNImagePickerPrivacyInfo.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNFS_PrivacyInfo.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  840 bytes for ./Payload/xlingo.app/RNFS_PrivacyInfo.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNFS_PrivacyInfo.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  780 bytes for ./Payload/xlingo.app/RNFS_PrivacyInfo.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/AppIcon60x60@2x.png ... 
+2026-06-30 10:37:41 +0000  6905 bytes for ./Payload/xlingo.app/AppIcon60x60@2x.png
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:41 +0000  552 bytes for ./Payload/xlingo.app/React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/React-cxxreact_privacy.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  792 bytes for ./Payload/xlingo.app/React-cxxreact_privacy.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/Assets.car ... 
+2026-06-30 10:37:41 +0000  258680 bytes for ./Payload/xlingo.app/Assets.car
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/AppIcon76x76@2x~ipad.png ... 
+2026-06-30 10:37:41 +0000  10016 bytes for ./Payload/xlingo.app/AppIcon76x76@2x~ipad.png
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/main.jsbundle ... 
+2026-06-30 10:37:41 +0000  6331639 bytes for ./Payload/xlingo.app/main.jsbundle
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/PrivacyInfo.xcprivacy ... 
+501 bytes for ./Payload/xlingo.app/PrivacyInfo.xcprivacy
+copying file ./Payload/xlingo.app/LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib ... 
+3815 bytes for ./Payload/xlingo.app/LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib
+copying file ./Payload/xlingo.app/LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib ... 
+2026-06-30 10:37:41 +0000  924 bytes for ./Payload/xlingo.app/LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/LaunchScreen.storyboardc/Info.plist ... 
+258 bytes for ./Payload/xlingo.app/LaunchScreen.storyboardc/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNSVGFilters.bundle/RNSVGArithmeticFilter.iphoneos.metallib ... 
+2026-06-30 10:37:41 +0000  3993 bytes for ./Payload/xlingo.app/RNSVGFilters.bundle/RNSVGArithmeticFilter.iphoneos.metallib
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNSVGFilters.bundle/RNSVGCompositeXor.iphoneos.metallib ... 
+2026-06-30 10:37:41 +0000  3509 bytes for ./Payload/xlingo.app/RNSVGFilters.bundle/RNSVGCompositeXor.iphoneos.metallib
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/RNSVGFilters.bundle/Info.plist ... 
+2026-06-30 10:37:41 +0000  771 bytes for ./Payload/xlingo.app/RNSVGFilters.bundle/Info.plist
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/Frameworks/hermesvm.framework/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:41 +0000  1798 bytes for ./Payload/xlingo.app/Frameworks/hermesvm.framework/_CodeSignature/CodeResources
+2026-06-30 10:37:41 +0000  copying file ./Payload/xlingo.app/Frameworks/hermesvm.framework/hermesvm ... 
+2026-06-30 10:37:42 +0000  6985904 bytes for ./Payload/xlingo.app/Frameworks/hermesvm.framework/hermesvm
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/hermesvm.framework/Info.plist ... 
+859 bytes for ./Payload/xlingo.app/Frameworks/hermesvm.framework/Info.plist
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/React.framework/_CodeSignature/CodeResources ... 
+2026-06-30 10:37:42 +0000  1798 bytes for ./Payload/xlingo.app/Frameworks/React.framework/_CodeSignature/CodeResources
+copying file ./Payload/xlingo.app/Frameworks/React.framework/React ... 
+2026-06-30 10:37:42 +0000  11812400 bytes for ./Payload/xlingo.app/Frameworks/React.framework/React
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/React.framework/Info.plist ... 
+744 bytes for ./Payload/xlingo.app/Frameworks/React.framework/Info.plist
+copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/_CodeSignature/CodeResources ... 
+3548 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/_CodeSignature/CodeResources
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:42 +0000  552 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/Info.plist ... 
+2026-06-30 10:37:42 +0000  689 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/Info.plist
+copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies ... 
+2026-06-30 10:37:42 +0000  1263760 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:42 +0000  552 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/PrivacyInfo.xcprivacy
+copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/Info.plist ... 
+2026-06-30 10:37:42 +0000  687 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/Info.plist
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:42 +0000  776 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/Info.plist ... 
+2026-06-30 10:37:42 +0000  689 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/Info.plist
+copying file ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/Info.plist ... 
+2026-06-30 10:37:42 +0000  781 bytes for ./Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework/Info.plist
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/embedded.mobileprovision ... 
+2026-06-30 10:37:42 +0000  25544 bytes for ./Payload/xlingo.app/embedded.mobileprovision
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@3x.png ... 
+2026-06-30 10:37:42 +0000  761 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@3x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@2x.png ... 
+2026-06-30 10:37:42 +0000  405 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon@2x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@2x.png ... 
+2026-06-30 10:37:42 +0000  589 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@2x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@3x.png ... 
+2026-06-30 10:37:42 +0000  502 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@3x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon.png ... 
+2026-06-30 10:37:42 +0000  290 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon.png
+copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@2x.png ... 
+2026-06-30 10:37:42 +0000  334 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon@2x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@3x.png ... 
+2026-06-30 10:37:42 +0000  839 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon@3x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon.png ... 
+2026-06-30 10:37:42 +0000  141 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.png ... 
+2026-06-30 10:37:42 +0000  653 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@2x.png ... 
+2026-06-30 10:37:42 +0000  201 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@2x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@3x.png ... 
+2026-06-30 10:37:42 +0000  266 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/close-icon@3x.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon.png ... 
+2026-06-30 10:37:42 +0000  220 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/clear-icon.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon.png ... 
+2026-06-30 10:37:42 +0000  317 bytes for ./Payload/xlingo.app/assets/node_modules/@react-navigation/elements/lib/module/assets/search-icon.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/assets/assets/icon.png ... 
+2026-06-30 10:37:42 +0000  110123 bytes for ./Payload/xlingo.app/assets/assets/icon.png
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/xlingo ... 
+2026-06-30 10:37:42 +0000  4113056 bytes for ./Payload/xlingo.app/xlingo
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/Info.plist ... 
+2026-06-30 10:37:42 +0000  1710 bytes for ./Payload/xlingo.app/Info.plist
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/RNCAsyncStorage_resources.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:42 +0000  512 bytes for ./Payload/xlingo.app/RNCAsyncStorage_resources.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/RNCAsyncStorage_resources.bundle/Info.plist ... 
+2026-06-30 10:37:42 +0000  797 bytes for ./Payload/xlingo.app/RNCAsyncStorage_resources.bundle/Info.plist
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/PkgInfo ... 
+2026-06-30 10:37:42 +0000  8 bytes for ./Payload/xlingo.app/PkgInfo
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/React-Core_privacy.bundle/PrivacyInfo.xcprivacy ... 
+2026-06-30 10:37:42 +0000  768 bytes for ./Payload/xlingo.app/React-Core_privacy.bundle/PrivacyInfo.xcprivacy
+2026-06-30 10:37:42 +0000  copying file ./Payload/xlingo.app/React-Core_privacy.bundle/Info.plist ... 
+2026-06-30 10:37:42 +0000  784 bytes for ./Payload/xlingo.app/React-Core_privacy.bundle/Info.plist
+2026-06-30 10:37:42 +0000  /usr/bin/ditto exited with 0
+2026-06-30 10:37:42 +0000  Processing step: IDEDistributionAppStoreInformationStep
+2026-06-30 10:37:42 +0000  Skipping step: IDEDistributionAppStoreInformationStep because it said so
+2026-06-30 10:37:42 +0000  Processing step: IDEDistributionGenerateProcessedDistributionItems
+2026-06-30 10:37:42 +0000  IDEDistributionItem init <DVTFilePath:0x71eae9080:'/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/React.framework'>
+2026-06-30 10:37:42 +0000  IDEDistributionItem init <DVTFilePath:0x71eae4f80:'/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/ReactNativeDependencies.framework'>
+2026-06-30 10:37:42 +0000  IDEDistributionItem init <DVTFilePath:0x6fc2fca80:'/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app/Frameworks/hermesvm.framework'>
+2026-06-30 10:37:42 +0000  IDEDistributionItem init <DVTFilePath:0x71eae9680:'/var/folders/94/jk_8q2t57y3_spnx1bw6b_940000gn/T/XcodeDistPipeline.~~~5CvQwH/Root/Payload/xlingo.app'>
+2026-06-30 10:37:42 +0000  Processing step: IDEDistributionCreateManifestStep

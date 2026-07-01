@@ -13,6 +13,7 @@
 @interface VariAudioPlayer : RCTEventEmitter <RCTBridgeModule, AVAudioPlayerDelegate>
 @property (nonatomic, strong) NSMutableDictionary<NSString *, AVAudioPlayer *> *players;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *loops;
+@property (nonatomic, strong) dispatch_queue_t playerQueue;
 @end
 
 @implementation VariAudioPlayer
@@ -28,6 +29,11 @@ RCT_EXPORT_MODULE();
   if (self) {
     _players = [NSMutableDictionary dictionary];
     _loops = [NSMutableDictionary dictionary];
+    _playerQueue = dispatch_queue_create("com.xlingo.varaudioplayer", DISPATCH_QUEUE_SERIAL);
+
+    NSError *sessionErr;
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:&sessionErr];
+    [[AVAudioSession sharedInstance] setActive:YES error:&sessionErr];
   }
   return self;
 }
@@ -66,7 +72,7 @@ RCT_EXPORT_METHOD(load:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+  dispatch_async(self.playerQueue, ^{
     NSString *path = [uri stringByReplacingOccurrencesOfString:@"file://" withString:@""];
     path = [path stringByRemovingPercentEncoding];
     NSURL *url = [NSURL fileURLWithPath:path];
@@ -99,11 +105,13 @@ RCT_EXPORT_METHOD(play:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  [p play];
-  [self sendStatus:playerId isPlaying:YES position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    [p play];
+    [self sendStatus:playerId isPlaying:YES position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
+    resolve(@YES);
+  });
 }
 
 // ── pause ──
@@ -111,11 +119,13 @@ RCT_EXPORT_METHOD(pause:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  [p pause];
-  [self sendStatus:playerId isPlaying:NO position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    [p pause];
+    [self sendStatus:playerId isPlaying:NO position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
+    resolve(@YES);
+  });
 }
 
 // ── stop ──
@@ -123,12 +133,14 @@ RCT_EXPORT_METHOD(stop:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  [p stop];
-  p.currentTime = 0;
-  [self sendStatus:playerId isPlaying:NO position:0 duration:p.duration * 1000 didFinish:NO];
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    [p stop];
+    p.currentTime = 0;
+    [self sendStatus:playerId isPlaying:NO position:0 duration:p.duration * 1000 didFinish:NO];
+    resolve(@YES);
+  });
 }
 
 // ── setRate ──
@@ -137,10 +149,12 @@ RCT_EXPORT_METHOD(setRate:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  p.rate = (float)rate;
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    p.rate = (float)rate;
+    resolve(@YES);
+  });
 }
 
 // ── setLooping ──
@@ -149,11 +163,13 @@ RCT_EXPORT_METHOD(setLooping:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  p.numberOfLoops = loop ? -1 : 0;
-  self.loops[playerId] = @(loop);
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    p.numberOfLoops = loop ? -1 : 0;
+    self.loops[playerId] = @(loop);
+    resolve(@YES);
+  });
 }
 
 // ── seek ──
@@ -162,11 +178,13 @@ RCT_EXPORT_METHOD(seek:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  p.currentTime = positionMs / 1000.0;
-  [self sendStatus:playerId isPlaying:p.isPlaying position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    p.currentTime = positionMs / 1000.0;
+    [self sendStatus:playerId isPlaying:p.isPlaying position:p.currentTime * 1000 duration:p.duration * 1000 didFinish:NO];
+    resolve(@YES);
+  });
 }
 
 // ── getStatus ──
@@ -174,14 +192,16 @@ RCT_EXPORT_METHOD(getStatus:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
-  resolve(@{
-    @"isPlaying": @(p.isPlaying),
-    @"position": @(p.currentTime * 1000),
-    @"duration": @(p.duration * 1000),
-    @"rate": @(p.rate),
-    @"loop": self.loops[playerId] ?: @(NO),
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (!p) { reject(@"NO_PLAYER", @"Player not loaded", nil); return; }
+    resolve(@{
+      @"isPlaying": @(p.isPlaying),
+      @"position": @(p.currentTime * 1000),
+      @"duration": @(p.duration * 1000),
+      @"rate": @(p.rate),
+      @"loop": self.loops[playerId] ?: @(NO),
+    });
   });
 }
 
@@ -190,10 +210,12 @@ RCT_EXPORT_METHOD(unload:(NSString *)playerId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioPlayer *p = self.players[playerId];
-  if (p) { [p stop]; p.delegate = nil; [self.players removeObjectForKey:playerId]; }
-  [self.loops removeObjectForKey:playerId];
-  resolve(@YES);
+  dispatch_async(self.playerQueue, ^{
+    AVAudioPlayer *p = self.players[playerId];
+    if (p) { [p stop]; p.delegate = nil; [self.players removeObjectForKey:playerId]; }
+    [self.loops removeObjectForKey:playerId];
+    resolve(@YES);
+  });
 }
 
 // ── AVAudioPlayerDelegate ──

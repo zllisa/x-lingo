@@ -59,11 +59,24 @@ export async function whisperSTTWithTimestamps(fileUri: string): Promise<Whisper
   formData.append('response_format', 'verbose_json');
   formData.append('timestamp_granularities[]', 'segment');
 
-  const response = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
-    body: formData,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3 * 60 * 1000); // 3 min
+
+  console.log('[Whisper] Uploading to Groq…', fileUri.substring(0, 80), 'mime:', mime);
+  let response: Response;
+  try {
+    response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('语音识别超时（3分钟），请检查网络后重试');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const respText = await response.text();
   console.log('[Whisper] HTTP', response.status, 'body length:', respText.length);

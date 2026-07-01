@@ -1,16 +1,18 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert, Platform, ActionSheetIOS, PermissionsAndroid, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Platform, ActionSheetIOS, PermissionsAndroid, Linking, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { unlink } from '@dr.pogodin/react-native-fs';
+import { useState } from 'react';
 import { useListenStore } from '../../stores/useListenStore';
 import { CheckCircle2 } from 'lucide-react-native';
 import { AudioFile } from '../../types';
 import { C, S } from '../../utils/theme';
 import { Video, Music, Upload, Folder, Trash2, GraduationCap, Sparkles, Newspaper, Tv, PlayCircle } from 'lucide-react-native';
 import { RootStackParamList } from '../App';
+import { uploadAndTriggerTranscode, qiniuEnabled } from '../../services/qiniu';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const RECOMMENDED = [
@@ -21,17 +23,41 @@ const RECOMMENDED = [
 export default function ListenScreen() {
   const navigation = useNavigation<Nav>();
   const { audioFiles, addFile, removeFile, setActiveFile, transcripts } = useListenStore();
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
 
-  const addAudioFile = (name: string, icon: string, uri: string) => {
-    const newFile: AudioFile = {
-      id: Date.now().toString(),
-      name,
-      icon,
-      duration: '--:--',
-      date: new Date().toLocaleDateString('zh-CN'),
-      uri,
+  const addVideoFile = async (name: string, uri: string) => {
+    const id = Date.now().toString();
+    const base: AudioFile = {
+      id, name, icon: '🎬', duration: '--:--',
+      date: new Date().toLocaleDateString('zh-CN'), uri,
     };
-    addFile(newFile);
+
+    if (qiniuEnabled()) {
+      setUploading(true);
+      setUploadMsg('正在上传视频至云端...');
+      console.log('[Upload] Starting upload, uri prefix:', uri.substring(0, 60));
+      try {
+        const { transcodeId } = await uploadAndTriggerTranscode(uri);
+        console.log('[Upload] Got transcodeId:', transcodeId);
+        setUploadMsg('上传成功，已触发转码');
+        addFile({ ...base, transcodeId });
+      } catch (e: any) {
+        Alert.alert('上传失败', e?.message || '请检查网络后重试');
+      } finally {
+        setUploading(false);
+        setUploadMsg('');
+      }
+    } else {
+      addFile(base);
+    }
+  };
+
+  const addAudioFile = (name: string, uri: string) => {
+    addFile({
+      id: Date.now().toString(), name, icon: '🎵', duration: '--:--',
+      date: new Date().toLocaleDateString('zh-CN'), uri,
+    });
   };
 
   const pickFromFile = async () => {
@@ -40,9 +66,13 @@ export default function ListenScreen() {
         type: [DocumentPicker.types.audio, DocumentPicker.types.video],
         copyTo: 'cachesDirectory',
       });
-      const icon = result.type?.includes('video') ? '🎬' : '🎵';
       const name = result.name || '未命名文件';
-      addAudioFile(name, icon, result.fileCopyUri || result.uri);
+      const fileUri = result.fileCopyUri || result.uri;
+      if (result.type?.includes('video')) {
+        await addVideoFile(name, fileUri);
+      } else {
+        addAudioFile(name, fileUri);
+      }
     } catch (e: any) {
       if (!DocumentPicker.isCancel(e)) {
         Alert.alert('提示', '模拟器不支持文件选择。请在真机上测试，或使用 macOS 桌面版。');
@@ -79,7 +109,7 @@ export default function ListenScreen() {
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
       const name = asset.fileName || `视频_${Date.now()}.mp4`;
-      addAudioFile(name, '🎬', asset.uri);
+      await addVideoFile(name, asset.uri);
     } catch (e: any) {
       if (e?.errorCode === 'cancelled') return;
       Alert.alert('提示', '相册视频选取失败，请重试');
@@ -119,6 +149,15 @@ export default function ListenScreen() {
 
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
+      {/* Upload progress overlay */}
+      <Modal visible={uploading} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={[S.bgSurface, S.roundedSM, { paddingHorizontal: 28, paddingVertical: 24, alignItems: 'center', minWidth: 200 }]}>
+            <ActivityIndicator size="large" color={C.accent} />
+            <Text style={[S.textSm, S.text2, S.mt3]}>{uploadMsg}</Text>
+          </View>
+        </View>
+      </Modal>
       <ScrollView style={S.flex1} contentContainerStyle={[S.px4, { paddingTop: 6, paddingBottom: 24 }]} showsVerticalScrollIndicator={false}>
 
         {/* ── Header ── */}

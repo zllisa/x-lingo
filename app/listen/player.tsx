@@ -160,10 +160,13 @@ export default function PlayerScreen() {
     setTranscribing(true);
     setTranscribeMsg('正在准备识别...');
     try {
-      const result = await transcribeFile(file.uri, (msg) => setTranscribeMsg(msg));
+      const result = await transcribeFile(file.uri, (msg) => setTranscribeMsg(msg), file.transcodeId);
       useListenStore.getState().setTranscript(activeFileId, result.items);
       if (result.remoteAudioUrl) {
         useListenStore.getState().setRemoteAudioUrl(activeFileId, result.remoteAudioUrl);
+      }
+      if (result.localAudioUri) {
+        useListenStore.getState().setLocalAudioUri(activeFileId, result.localAudioUri);
       }
     } catch (e: any) {
       console.error('STT error:', e?.message, e);
@@ -185,21 +188,45 @@ export default function PlayerScreen() {
 
     if (playableUriRef.current) { await doLoad(playableUriRef.current); return; }
 
-    try {
-      await doLoad(file.uri);
-      playableUriRef.current = file.uri;
-    } catch (e) {
-      // Local file gone — fall back to the durable Qiniu copy if we have one
-      if (!file.remoteAudioUrl) throw e;
-      setRestoring(true);
+    // Prefer locally-cached WAV (downloaded during transcription via pure-JS
+    // fetch). Verify it still exists — iOS may have purged the cache folder.
+    if (file.localAudioUri) {
       try {
-        const { downloadQiniuAudio } = await import('../../services/qiniu');
-        const local = await downloadQiniuAudio(file.remoteAudioUrl);
-        await doLoad(local);
-        playableUriRef.current = local;
-      } finally {
-        setRestoring(false);
+        const { exists } = await import('@dr.pogodin/react-native-fs');
+        const fp = file.localAudioUri.replace(/^file:\/\//, '');
+        if (await exists(fp)) {
+          await doLoad(file.localAudioUri);
+          playableUriRef.current = file.localAudioUri;
+          return;
+        }
+        console.log('[Player] local cache purged, falling back');
+      } catch {}
+    }
+
+    // AVAudioPlayer cannot play video containers — skip directly to Qiniu audio
+    const isVideoUri = /\.(mp4|mov|m4v)$/i.test(file.uri) || file.uri.startsWith('ph://');
+
+    if (!isVideoUri) {
+      try {
+        await doLoad(file.uri);
+        playableUriRef.current = file.uri;
+        return;
+      } catch (e) {
+        if (!file.remoteAudioUrl) throw e;
       }
+    } else if (!file.remoteAudioUrl) {
+      throw new Error('无可播放的音频，请重新识别');
+    }
+
+    // Download audio from Qiniu (either video fallback or first-time restore)
+    setRestoring(true);
+    try {
+      const { downloadQiniuAudio } = await import('../../services/qiniu');
+      const local = await downloadQiniuAudio(file.remoteAudioUrl!);
+      await doLoad(local);
+      playableUriRef.current = local;
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -215,8 +242,8 @@ export default function PlayerScreen() {
           await loadMain();
         } catch (e: any) {
           console.warn('[Player] load failed:', file.uri, e?.message);
-          // File may have been cleaned by iOS and no remote copy available
-          Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
+          // Surface the real error so it can be diagnosed without a console.
+          Alert.alert('播放加载失败', `${e?.message || '未知错误'}\n\nuri: ${(file.uri || '').substring(0, 80)}\nremote: ${(file.remoteAudioUrl || '无').substring(0, 80)}`);
           return;
         }
         await play(MAIN_ID);
