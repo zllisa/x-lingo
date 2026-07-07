@@ -254,6 +254,58 @@ export async function deepSeekTranslate(text: string): Promise<string> {
   return (data.choices[0].message.content as string).trim();
 }
 
+// ── 语义断句（Miraa 路线）：对 ASR 逐词拼出的纯文本重新做气口/意群断句 ──
+const RESEGMENT_PROMPT = `你是一个韩语精听（跟读 shadowing）App 的字幕断句引擎。
+你会收到一整段韩语文本（由语音识别的逐词结果拼接而成，可能带标点）。
+把它重新切分成自然的「意群 / 气口」——学习者一口气能跟读的单位，通常相当于 1~8 秒的语速长度。
+
+绝对规则：
+- 【一个字都不许改】：不得增删、替换、纠正、翻译任何字符。输出拼起来必须和输入包含完全相同的字符、且顺序一致（空格/换行差异除外）。
+- 你只能决定「在哪里切」，然后按原顺序把各段返回。
+- 【不许在韩语语法块内部断开】：如 -게 되다、-더라고요、-는데、-어서、-고 等连接词尾、终结词尾、敬语结尾，必须保持在同一段里完整。
+- 优先在小句/意群边界、终结词尾、主要标点处切。
+- 每段保持跟读长度（约 1~8 秒的词量）；过长的句子在逗号处二次切分。
+
+只返回一个 JSON 字符串数组，每个元素是一段，不要任何解释、不要 markdown 代码块。`;
+
+/**
+ * 语义重断句：纯韩语文本 → 断好的句子数组（顺序保持）。
+ * temperature=0 + 强约束「一字不改只切分」，保证下游 realign 回贴不漂移。
+ */
+export async function deepSeekResegment(text: string): Promise<string[]> {
+  if (!text.trim()) return [];
+
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: RESEGMENT_PROMPT },
+        { role: 'user', content: text },
+      ],
+      temperature: 0,
+      max_tokens: 8000,
+    }),
+  });
+
+  if (!response.ok) throw new Error(`DeepSeek resegment error: ${response.status}`);
+
+  const data = await response.json();
+  let content = (data.choices[0].message.content as string || '').trim();
+  content = content.replace(/^```(?:json)?\s*/g, '').replace(/\s*```$/g, '').trim();
+  const start = content.indexOf('[');
+  const end = content.lastIndexOf(']');
+  if (start >= 0 && end > start) content = content.substring(start, end + 1);
+
+  const arr = JSON.parse(content);
+  if (!Array.isArray(arr)) throw new Error('resegment: 响应不是 JSON 数组');
+  return arr.map((s: any) => String(s ?? '').trim()).filter(Boolean);
+}
+
 const TRANSLATE_BATCH_PROMPT = `你是韩/英译中翻译器。输入是一个 JSON 字符串数组，每个元素是一句韩语或英语。
 逐句翻译成简体中文，返回一个等长、顺序与输入完全一致的 JSON 字符串数组。
 只输出 JSON 数组本身，不要任何解释、不要 markdown 代码块。`;
@@ -309,6 +361,9 @@ JSON format:
     {"text": "뭐: 무엇 的口语缩写", "level": "beginner"},
     {"text": "해요체: 尊敬阶", "level": "beginner"}
   ],
+  "why": "为什么母语者会这样表达：语气/语感/选这个说法而不是别的说法的原因，用中文，1-3句",
+  "chunks": [{"chunk": "-는 게 좋다", "meaning": "最好…（固定搭配，表建议）"}],
+  "contractions": [{"form": "뭐", "full": "무엇", "meaning": "什么"}, {"form": "건", "full": "것은", "meaning": "…这个东西（主题）"}],
   "examples": ["내일 뭐 할 거예요? (明天干什么？)", "주말에 어디 갈 거예요? (周末去哪儿？)"],
   "usage": "用于询问对方的周末计划，朋友/熟人之间常用"
 }
@@ -316,6 +371,9 @@ JSON format:
 Rules:
 - "words": break the sentence into meaningful chunks, give Chinese meanings.
 - "grammar": explain each grammar pattern, sentence ending, particle, speech level, conjugation. For each, assign a "level": "beginner" (TOPIK 1-2), "intermediate" (TOPIK 3-4), or "advanced" (TOPIK 5-6).
+- "why": 用中文解释「为什么这样表达」——母语者选择这个说法的语气/语感/微妙差别，而不只是字面意思。1-3句。
+- "chunks": 句子里的「词块 / 固定搭配 / 惯用组合」，不是逐词，而是常一起出现、要整体记的组合。没有就返回 []。
+- "contractions": 句子里出现的「口语缩写 / 缩略形式」，还原成完整原型。例如 뭐→무엇、건→것은、해야지→해야 하지、난→나는。没有就返回 []。
 - "examples": 2-3 similar sentences using the same grammar patterns, with Chinese translations.
 - "usage": 1-2 sentences about when/where this sentence is used, formality level, alternatives.
 - If there are English loanwords, note them.`;
@@ -334,7 +392,7 @@ export async function deepSeekExplain(text: string): Promise<ExplainData> {
         { role: 'user', content: text },
       ],
       temperature: 0.3,
-      max_tokens: 2000,
+      max_tokens: 2800,
     }),
   });
 
@@ -370,7 +428,17 @@ export async function deepSeekExplain(text: string): Promise<ExplainData> {
     })) : [];
     const examples = Array.isArray(raw.examples) ? raw.examples.map((e: any) => String(e)) : [];
     const usage = typeof raw?.usage === 'string' ? raw.usage : String(raw?.usage ?? '');
-    return { words, grammar, examples, usage };
+    const why = typeof raw?.why === 'string' ? raw.why : (raw?.why != null ? String(raw.why) : '');
+    const chunks = Array.isArray(raw.chunks) ? raw.chunks.map((c: any) => ({
+      chunk: typeof c?.chunk === 'string' ? c.chunk : String(c?.chunk ?? ''),
+      meaning: typeof c?.meaning === 'string' ? c.meaning : String(c?.meaning ?? ''),
+    })).filter((c: any) => c.chunk) : [];
+    const contractions = Array.isArray(raw.contractions) ? raw.contractions.map((c: any) => ({
+      form: typeof c?.form === 'string' ? c.form : String(c?.form ?? ''),
+      full: typeof c?.full === 'string' ? c.full : String(c?.full ?? ''),
+      meaning: typeof c?.meaning === 'string' ? c.meaning : String(c?.meaning ?? ''),
+    })).filter((c: any) => c.form) : [];
+    return { words, grammar, examples, usage, why, chunks, contractions };
   }
 
   try {

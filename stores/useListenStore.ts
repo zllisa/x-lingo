@@ -2,11 +2,24 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AudioFile, TranscriptItem } from '../types';
+import { transcribeFile } from '../services/transcription';
+
+// 后台转写任务状态。转写在 store 里跑，不绑定任何组件——用户可以离开精听页去
+// 别的模块，任务不中断，回来仍能看到进度 / 结果。任务本身不持久化（partialize
+// 未包含），app 重启后不残留。
+export interface TranscribeJob {
+  status: 'running' | 'done' | 'error';
+  message: string;
+  error?: string;
+  startedAt: number;    // 任务开始时间戳（用于显示已识别时长，让"正在识别"可感知）
+  resultCount?: number; // 完成时的句数
+}
 
 interface ListenStore {
   audioFiles: AudioFile[];
   activeFileId: string | null;
   transcripts: Record<string, TranscriptItem[]>;
+  transcribeJobs: Record<string, TranscribeJob>;
   showTranslation: boolean;
   playerSpeed: number;
   isPlaying: boolean;
@@ -24,6 +37,8 @@ interface ListenStore {
   prevTranscript: () => void;
   toggleTranslation: () => void;
   setTranscript: (fileId: string, items: TranscriptItem[]) => void;
+  startTranscribeJob: (fileId: string, fileUri: string, transcodeId?: string) => void;
+  clearTranscribeJob: (fileId: string) => void;
   setExplain: (fileId: string, sentenceIdx: number, explain: NonNullable<TranscriptItem['explain']>) => void;
   setRemoteAudioUrl: (fileId: string, url: string) => void;
   setLocalAudioUri: (fileId: string, uri: string) => void;
@@ -36,6 +51,7 @@ export const useListenStore = create<ListenStore>()(
       audioFiles: [],
       activeFileId: null,
       transcripts: {},
+      transcribeJobs: {},
       showTranslation: false,
       playerSpeed: 1,
       isPlaying: false,
@@ -46,9 +62,11 @@ export const useListenStore = create<ListenStore>()(
       removeFile: (id) =>
         set((s) => {
           const { [id]: _, ...rest } = s.transcripts;
+          const { [id]: __, ...restJobs } = s.transcribeJobs;
           return {
             audioFiles: s.audioFiles.filter((f) => f.id !== id),
             transcripts: rest,
+            transcribeJobs: restJobs,
             activeFileId: s.activeFileId === id ? null : s.activeFileId,
           };
         }),
@@ -70,6 +88,40 @@ export const useListenStore = create<ListenStore>()(
       toggleTranslation: () => set((s) => ({ showTranslation: !s.showTranslation })),
       setTranscript: (fileId, items) =>
         set((s) => ({ transcripts: { ...s.transcripts, [fileId]: items } })),
+      // 启动一个后台转写任务。不 await——立即返回，任务在后台异步跑。UI 只需
+      // 读 transcribeJobs[fileId] 反映进度。重复调用同一文件（已在 running）会被忽略。
+      startTranscribeJob: (fileId, fileUri, transcodeId) => {
+        const cur = get().transcribeJobs[fileId];
+        if (cur?.status === 'running') return;
+        const startedAt = Date.now();
+        const patch = (job: Omit<TranscribeJob, 'startedAt'>) =>
+          set((s) => ({ transcribeJobs: { ...s.transcribeJobs, [fileId]: { ...job, startedAt } } }));
+        patch({ status: 'running', message: '正在准备识别...' });
+        // 重新识别时复用已有的远端音频，跳过转码（否则复用旧 transcodeId 会立即报错）。
+        const existingRemoteAudioUrl = get().audioFiles.find((f) => f.id === fileId)?.remoteAudioUrl;
+        (async () => {
+          try {
+            const result = await transcribeFile(
+              fileUri,
+              (message) => patch({ status: 'running', message }),
+              transcodeId,
+              existingRemoteAudioUrl,
+            );
+            get().setTranscript(fileId, result.items);
+            if (result.remoteAudioUrl) get().setRemoteAudioUrl(fileId, result.remoteAudioUrl);
+            if (result.localAudioUri) get().setLocalAudioUri(fileId, result.localAudioUri);
+            patch({ status: 'done', message: `识别完成 · ${result.items.length} 句`, resultCount: result.items.length });
+          } catch (e: any) {
+            console.error('[Transcribe] job failed:', e?.message, e);
+            patch({ status: 'error', message: '识别失败', error: e?.message || '请检查网络后重试' });
+          }
+        })();
+      },
+      clearTranscribeJob: (fileId) =>
+        set((s) => {
+          const { [fileId]: _, ...rest } = s.transcribeJobs;
+          return { transcribeJobs: rest };
+        }),
       setRemoteAudioUrl: (fileId, url) =>
         set((s) => ({
           audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, remoteAudioUrl: url } : f)),
@@ -93,7 +145,9 @@ export const useListenStore = create<ListenStore>()(
     }),
     {
       name: 'listen-store',
-      version: 3,
+      // v4: transcript 结构新增 start/end（秒级精确时间戳）。旧缓存缺这两个字段，
+      // 直接清空让用户重新识别一次，避免旧数据混入导致 seek/循环行为不一致。
+      version: 4,
       migrate: () => ({ audioFiles: [], transcripts: {}, playerSpeed: 1, showTranslation: false }),
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },

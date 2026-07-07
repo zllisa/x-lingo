@@ -22,7 +22,7 @@ const RECOMMENDED = [
 
 export default function ListenScreen() {
   const navigation = useNavigation<Nav>();
-  const { audioFiles, addFile, removeFile, setActiveFile, transcripts } = useListenStore();
+  const { audioFiles, addFile, removeFile, setActiveFile, transcripts, transcribeJobs } = useListenStore();
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
 
@@ -213,8 +213,26 @@ export default function ListenScreen() {
                   <Text style={[{ fontSize: 12.5 }, S.text3, { marginTop: 3 }]}>
                     {item.duration !== '--:--' ? `${item.duration} · ` : ''}{item.date}
                   </Text>
-                  {/* Transcript status */}
+                  {/* Transcript status — 后台识别任务优先，其次显示已识别结果 */}
                   {(() => {
+                    const job = transcribeJobs[item.id];
+                    if (job?.status === 'running') {
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                          <ActivityIndicator size="small" color={C.accent} />
+                          <Text style={[{ fontSize: 11, fontWeight: '600' }, { color: C.accent }]} numberOfLines={1}>
+                            {job.message || '识别中...'}
+                          </Text>
+                        </View>
+                      );
+                    }
+                    if (job?.status === 'error') {
+                      return (
+                        <Text style={[{ fontSize: 11, fontWeight: '600', marginTop: 6 }, { color: C.pink }]} numberOfLines={1}>
+                          识别失败，点击进入重试
+                        </Text>
+                      );
+                    }
                     const lines = transcripts[item.id];
                     if (!lines?.length) return null;
                     return (

@@ -1,4 +1,5 @@
 import { AZURE_TTS_KEY, AZURE_TTS_REGION } from '../constants/api';
+import type { Word } from './resegment';
 
 // ═══════════════════════════════════════════════════════════════
 // Azure Batch Transcription — Speech-to-Text REST API v3.2
@@ -110,6 +111,54 @@ async function fetchResult(selfUrl: string): Promise<AzureBatchSegment[]> {
   return segments;
 }
 
+// Parse an ISO-8601 duration like "PT1.23S" / "PT1M2.5S" → seconds (fallback
+// when word-level entries carry `offset`/`duration` strings instead of ticks).
+function isoDurationToSec(s: string): number {
+  const m = /P(?:T)?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?/.exec(s || '');
+  if (!m) return NaN;
+  const h = parseFloat(m[1] || '0');
+  const min = parseFloat(m[2] || '0');
+  const sec = parseFloat(m[3] || '0');
+  return h * 3600 + min * 60 + sec;
+}
+
+function ticks(w: any, offsetKey: 'offset' | 'duration'): number {
+  const tickKey = offsetKey === 'offset' ? 'offsetInTicks' : 'durationInTicks';
+  if (typeof w[tickKey] === 'number') return w[tickKey] / TICKS_PER_SEC;
+  if (typeof w[offsetKey] === 'string') return isoDurationToSec(w[offsetKey]);
+  return NaN;
+}
+
+// ── fetch result and flatten逐词时间戳（Miraa 路线：只要词，不要 Azure 的分句）──
+async function fetchWords(selfUrl: string): Promise<Word[]> {
+  const resp = await fetch(`${selfUrl}/files`, {
+    headers: { 'Ocp-Apim-Subscription-Key': AZURE_TTS_KEY },
+  });
+  const data = await resp.json();
+  const file = (data.values || []).find((v: any) => v.kind === 'Transcription');
+  if (!file?.links?.contentUrl) throw new Error('Azure Batch: 结果文件缺失');
+
+  const contentResp = await fetch(file.links.contentUrl);
+  const result = await contentResp.json();
+
+  const phrases: any[] = result.recognizedPhrases || [];
+  const words: Word[] = [];
+  for (const p of phrases) {
+    if (p.recognitionStatus !== 'Success') continue;
+    const ws: any[] = p.nBest?.[0]?.words || [];
+    for (const w of ws) {
+      const text = String(w.word ?? w.Word ?? '').trim();
+      const start = ticks(w, 'offset');
+      const dur = ticks(w, 'duration');
+      if (!text || !Number.isFinite(start) || !Number.isFinite(dur)) continue;
+      words.push({ text, start, end: start + dur });
+    }
+  }
+  words.sort((a, b) => a.start - b.start);
+  console.log('[AzureBatch] parsed', words.length, 'words');
+  return words;
+}
+
 // ── best-effort cleanup so jobs don't pile up in the Azure resource ──
 async function deleteTranscription(selfUrl: string): Promise<void> {
   try {
@@ -136,6 +185,26 @@ export async function azureBatchTranscribe(
     console.log('[AzureBatch] got', segments.length, 'segments');
     if (!segments.length) throw new Error('Azure 没有识别到任何语音内容');
     return segments;
+  } finally {
+    deleteTranscription(selfUrl);
+  }
+}
+
+/**
+ * 逐词版：转写一个公网可达的音频 URL，返回逐词时间戳（Word[]），交给
+ * resegment 模块重新语义断句。用完删除任务。
+ */
+export async function azureBatchWords(
+  audioUrl: string,
+  onProgress?: (msg: string) => void,
+): Promise<Word[]> {
+  console.log('[AzureBatch] words', audioUrl.substring(0, 100), 'region:', AZURE_TTS_REGION);
+  const selfUrl = await createTranscription(audioUrl);
+  try {
+    await pollTranscription(selfUrl, onProgress);
+    const words = await fetchWords(selfUrl);
+    if (!words.length) throw new Error('Azure 没有识别到任何语音内容');
+    return words;
   } finally {
     deleteTranscription(selfUrl);
   }

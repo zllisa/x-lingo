@@ -70,7 +70,8 @@ export default function App() {
           <NavigationContainer>
             <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={isLoggedIn ? 'Tabs' : 'Login'}>
               <Stack.Screen name="Tabs" component={TabLayout} />
-              <Stack.Screen name="Chat" component={ChatScreen} />
+              {/* 禁用侧滑返回：聊天页要用右滑锁定语音，两者会冲突；返回用页面内的「返回」按钮 */}
+              <Stack.Screen name="Chat" component={ChatScreen} options={{ gestureEnabled: false }} />
               <Stack.Screen name="TaskIntro" component={TaskIntroScreen} />
               <Stack.Screen name="Conversations" component={ConversationsScreen} />
               <Stack.Screen name="Player" component={PlayerScreen} />

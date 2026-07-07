@@ -1,4 +1,5 @@
 import { GROQ_API_KEY } from '../constants/api';
+import type { Word } from './resegment';
 const ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
 export async function whisperSTT(fileUri: string): Promise<string> {
@@ -21,6 +22,64 @@ export async function whisperSTT(fileUri: string): Promise<string> {
 
   const data = await response.json();
   return data.text as string;
+}
+
+// ── Word-level timestamps for 精听 (Miraa 路线) ──
+//
+// 只要逐词时间戳，不要 Whisper 自带的分句。断句交给 resegment 模块（LLM 语义
+// 断句 + realign 回贴）。verbose_json + timestamp_granularities[]=word 时，Groq
+// 在顶层返回 data.words = [{ word, start, end }]（秒）。
+export async function whisperWords(fileUri: string): Promise<Word[]> {
+  const formData = new FormData();
+  const ext = fileUri.split('.').pop() || 'm4a';
+  const mime = ext === 'wav' ? 'audio/wav' : ext === 'mp4' ? 'audio/mp4' : ext === 'mp3' ? 'audio/mpeg' : 'audio/m4a';
+  formData.append('file', { uri: fileUri, type: mime, name: `upload.${ext}` } as any);
+  formData.append('model', 'whisper-large-v3');
+  formData.append('response_format', 'verbose_json');
+  formData.append('timestamp_granularities[]', 'word');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3 * 60 * 1000); // 3 min
+
+  console.log('[Whisper] Uploading (word-level) to Groq…', fileUri.substring(0, 80), 'mime:', mime);
+  let response: Response;
+  try {
+    response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('语音识别超时（3分钟），请检查网络后重试');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const respText = await response.text();
+  console.log('[Whisper] HTTP', response.status, 'body length:', respText.length);
+  if (!response.ok) {
+    throw new Error(`Whisper STT (word) error: ${response.status} ${respText.substring(0, 300)}`);
+  }
+  if (!respText.trim()) {
+    throw new Error('Whisper STT returned empty response — possible rate limit or file too large for free tier (25 MB cap).');
+  }
+
+  let data: any;
+  try {
+    data = JSON.parse(respText);
+  } catch (e: any) {
+    throw new Error(`Whisper STT JSON parse error: ${e?.message}. Raw: ${respText.substring(0, 200)}`);
+  }
+
+  const words: Word[] = (data.words || [])
+    .map((w: any) => ({ text: String(w.word ?? '').trim(), start: Number(w.start), end: Number(w.end) }))
+    .filter((w: Word) => w.text.length > 0 && Number.isFinite(w.start) && Number.isFinite(w.end));
+
+  console.log('[Whisper] word-level:', words.length, 'words');
+  if (!words.length) throw new Error('Whisper 没有识别到任何语音内容');
+  return words;
 }
 
 // ── Timed segments for 精听 (intensive listening) ──

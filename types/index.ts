@@ -69,7 +69,9 @@ export interface AudioFile {
 }
 
 export interface TranscriptItem {
-  time: string;
+  time: string;   // mm:ss，仅用于显示
+  start?: number; // 秒，精确起点（resegment 回贴）。缺省时回落解析 time
+  end?: number;   // 秒，精确终点。单句循环 / 高亮用这个，避免蹭到下一句
   ko: string;
   roma: string;
   zh: string;
@@ -92,6 +94,12 @@ export interface ExplainData {
   grammar: GrammarExplainItem[];
   examples: string[];
   usage: string;
+  // 为什么这样表达（语感 / 母语者为何选这个说法）。可选：旧缓存没有。
+  why?: string;
+  // 词块 / 固定搭配（惯用组合，非逐词）
+  chunks?: { chunk: string; meaning: string }[];
+  // 口语缩写 / 缩略 → 还原成原型（如 뭐→무엇、건→것은、해야지→해야 하지）
+  contractions?: { form: string; full: string; meaning: string }[];
 }
 
 export interface Word {

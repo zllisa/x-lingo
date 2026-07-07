@@ -1,7 +1,8 @@
-import { whisperSTTWithTimestamps, type WhisperSegment } from './whisperSTT';
+import { whisperWords } from './whisperSTT';
 // Azure STT 保留备用 — import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
-import { azureBatchTranscribe } from './azureBatchSTT';
-import { deepSeekTranslate, deepSeekTranslateBatch } from './deepseek';
+import { azureBatchWords } from './azureBatchSTT';
+import { resegmentWords, type Word } from './resegment';
+import { deepSeekTranslate, deepSeekTranslateBatch, deepSeekResegment } from './deepseek';
 import { qiniuExtractAudio, qiniuEnabled, resumeTranscodeAudio, resumeTranscodeUrl } from './qiniu';
 import { extractAudio } from './AudioExtractor';
 import { stat } from '@dr.pogodin/react-native-fs';
@@ -54,13 +55,26 @@ export async function transcribeFile(
   fileUri: string,
   onProgress?: (message: string) => void,
   transcodeId?: string,
+  existingRemoteAudioUrl?: string,
 ): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string; localAudioUri?: string }> {
   let audioUri = fileUri;
-  let remoteAudioUrl: string | undefined;
+  let remoteAudioUrl: string | undefined = existingRemoteAudioUrl;
   // Azure Batch transcribes straight from the Qiniu URL — no local WAV needed.
   const useAzure = STT_PROVIDER === 'azure';
 
-  if (transcodeId) {
+  if (useAzure && existingRemoteAudioUrl) {
+    // ── 重新识别 ── 已经有远端音频（首次识别时上传/转码过），直接复用，跳过
+    // 转码。避免复用早已完成/被清理的旧 transcodeId 去 resume 导致立即报错，
+    // 那正是「点了识别却像没反应」的根因。
+    onProgress?.('正在准备音频（复用已上传音频）...');
+    try {
+      const { downloadQiniuAudio } = await import('./qiniu');
+      audioUri = await downloadQiniuAudio(existingRemoteAudioUrl);
+    } catch (e: any) {
+      // 下载本地缓存失败不致命——Azure 服务端会直接从 remoteAudioUrl 拉取。
+      console.warn('[Transcription] re-identify local cache download failed:', e?.message);
+    }
+  } else if (transcodeId) {
     // Transcode was triggered at upload time — just poll for completion.
     onProgress?.('正在等待云端转码完成...');
     if (useAzure) {
@@ -93,36 +107,35 @@ export async function transcribeFile(
     }
   }
 
-  // ── STT ── Azure Batch when we have a remote URL; otherwise Groq Whisper.
-  let rawSegments: WhisperSegment[];
+  // ── STT ── 只取「文字 + 逐词时间戳」，扔掉 ASR 自带的分句（Miraa 路线）。
+  // Azure Batch when we have a remote URL; otherwise Groq Whisper.
+  let words: Word[];
   if (useAzure && remoteAudioUrl) {
     onProgress?.('正在识别语音 (Azure 云端识别)...');
     console.log('[Transcription] Azure Batch STT from', remoteAudioUrl);
-    rawSegments = await azureBatchTranscribe(remoteAudioUrl, onProgress);
+    words = await azureBatchWords(remoteAudioUrl, onProgress);
   } else {
     if (!(audioUri === fileUri && isVideo(fileUri))) {
       onProgress?.('正在识别语音 (Groq Whisper)...');
     }
     console.log('[Transcription] Groq STT audioUri:', audioUri);
-    rawSegments = await whisperSTTWithTimestamps(audioUri);
+    words = await whisperWords(audioUri);
   }
 
-  if (!rawSegments.length) {
+  if (!words.length) {
     throw new Error('没有识别到任何语音内容');
   }
+  console.log('[Transcription] STT returned', words.length, 'words');
 
-  // WhisperSegment → unified segment shape
-  const segments = rawSegments.map((s: WhisperSegment) => ({
-    start: s.start,
-    end: s.end,
-    text: s.text,
-  }));
+  // ── 语义重断句 + 回贴时间轴 ── LLM 对逐词文本做气口/意群断句，realign 把每
+  // 句映射回精确的 start/end；LLM 失败时本地规则兜底。每个句子都带真实的秒级
+  // start/end（供播放器单句循环 / 高亮用），不再靠「下一句起点」倒推。
+  const segments = await resegmentWords(words, deepSeekResegment, onProgress);
+  if (!segments.length) {
+    throw new Error('断句失败：没有得到任何句子');
+  }
+  console.log('[Transcription] resegmented into', segments.length, 'sentences');
 
-  console.log('[Transcription] STT returned', segments.length, 'segments');
-
-  // DeepSeek already provides properly split sentences — no merging needed.
-  // Proportional timestamps have contiguous boundaries, so any merge logic
-  // would incorrectly combine correctly-split sentences.
   onProgress?.(`已识别 ${segments.length} 个句子，正在翻译...`);
 
   // Translate in chunks — one DeepSeek call per chunk instead of per sentence.
@@ -148,6 +161,8 @@ export async function transcribeFile(
     batch.forEach((seg, j) => {
       results.push({
         time: formatTime(seg.start),
+        start: seg.start,
+        end: seg.end,
         ko: seg.text,
         roma: '', // romanization is computed locally in the UI (utils/romanize)
         zh: translations[j] || '(翻译失败)',

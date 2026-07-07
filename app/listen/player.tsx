@@ -1,19 +1,18 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  BookOpen, ChevronLeft, Copy,
-  MessageCircle,
+  BookOpen, CheckCircle2, ChevronLeft, Copy,
+  Lightbulb, MessageCircle,
   Mic,
-  Pause, Play, Repeat,
+  Pause, Play, Puzzle, Repeat, Scissors,
   SkipBack, SkipForward, Star, Type, Volume2, X,
 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, Modal, ScrollView, Text,
+  ActivityIndicator, Alert, AppState, FlatList, Modal, ScrollView, Text,
   TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { transcribeFile } from '../../services/transcription';
 import {
   addPlaybackListener,
   getStatus,
@@ -27,14 +26,26 @@ import {
   type PlaybackEvent,
 } from '../../services/VariAudioPlayer';
 import { useLibraryStore } from '../../stores/useLibraryStore';
-import { useListenStore } from '../../stores/useListenStore';
+import { useListenStore, type TranscribeJob } from '../../stores/useListenStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { romanize, romanizeWords } from '../../utils/romanize';
 import { useWordLookup } from '../../hooks/useWordLookup';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import type { TranscriptItem } from '../../types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// ── 句子时间戳读取 ── 优先用精确的秒级 start/end（resegment 回贴得到）；
+// 旧缓存没有这两个字段时回落解析 mm:ss 显示串。
+const parseTimeStr = (t: string): number => {
+  const [m, s] = (t || '').split(':').map(Number);
+  return (m || 0) * 60 + (s || 0);
+};
+const itemStartSec = (it: TranscriptItem): number => it.start ?? parseTimeStr(it.time);
+// 句子终点：优先用自己的 end；没有则退回「下一句起点」，都没有则用整段时长。
+const itemEndSec = (it: TranscriptItem, next: TranscriptItem | undefined, fallbackSec: number): number =>
+  it.end ?? (next ? itemStartSec(next) : fallbackSec);
 
 const formatMs = (ms: number) => {
   const m = Math.floor(ms / 60000);
@@ -44,19 +55,41 @@ const formatMs = (ms: number) => {
 
 const MAIN_ID = 'main';
 
+// 临时的 bundle 版本标记，显示在头部，用于确认手机加载的是最新 JS（排查
+// 「改了代码但行为没变」＝旧 bundle 的问题）。确认后可删。
+const BUILD_TAG = 'v6';
+
 export default function PlayerScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const {
     audioFiles, activeFileId, transcripts, showTranslation, toggleTranslation,
     playerSpeed, setSpeed, isPlaying, setPlaying, progress, setProgress,
-    transcriptIdx, setTranscriptIdx,
+    transcriptIdx, setTranscriptIdx, transcribeJobs, startTranscribeJob, clearTranscribeJob,
   } = useListenStore();
   const file = audioFiles.find(f => f.id === activeFileId);
   const items = activeFileId ? transcripts[activeFileId] || [] : [];
 
-  const [transcribing, setTranscribing] = useState(false);
-  const [transcribeMsg, setTranscribeMsg] = useState('');
+  // 转写状态来自 store（后台任务），不再是组件局部 state——离开本页任务不中断。
+  const job = activeFileId ? transcribeJobs[activeFileId] : undefined;
+  const transcribing = job?.status === 'running';
+  const transcribeMsg = job?.message || '';
+  // 已识别时长：让「正在识别」可感知、不像卡死。running 时每秒跳一下。
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (job?.status !== 'running') return;
+    setNowTick(Date.now());
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [job?.status]);
+  const elapsedSec = job ? Math.max(0, Math.floor((nowTick - job.startedAt) / 1000)) : 0;
+  // 识别完成后，顶部绿条提示保留几秒再自动清除（给一个明确的「完成」反馈）。
+  useEffect(() => {
+    if (job?.status === 'done' && activeFileId) {
+      const t = setTimeout(() => clearTranscribeJob(activeFileId), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [job?.status, activeFileId, clearTranscribeJob]);
   const [restoring, setRestoring] = useState(false);
   // Resolved playable file:// uri for the current file (may be a re-download
   // from Qiniu if the local cache was purged). Reset when the file changes.
@@ -70,6 +103,42 @@ export default function PlayerScreen() {
   const rateRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptListRef = useRef<FlatList<any>>(null);
+  // 当前正在读到的词（句内 token 下标），用于卡拉OK式词级高亮
+  const [wordIdx, setWordIdx] = useState(-1);
+  // 手动滚动状态：用户拖动时暂停自动跟随，停手 3 秒后滑回当前句
+  const userScrollRef = useRef(false);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastScrolledIdxRef = useRef(-1);
+  const transcriptIdxRef = useRef(0);
+  useEffect(() => { transcriptIdxRef.current = transcriptIdx; }, [transcriptIdx]);
+  // ── 重新识别完成落地：暂停播放，回到第一句 ──
+  // 新断句和旧断句的句子边界对不上，与其把高亮硬续在中途，不如干脆停下来从头
+  // 开始。只在任务 running → done 的瞬间触发（而不是监听字幕数组变化），这样
+  // AI 讲解写入字幕数组等其它更新不会误触发暂停复位。
+  const stopEchoRef = useRef<() => void>(() => {});
+  const prevJobStatusRef = useRef<TranscribeJob['status'] | undefined>(undefined);
+  useEffect(() => {
+    const status = job?.status;
+    if (prevJobStatusRef.current === 'running' && status === 'done') {
+      stopEchoRef.current();
+      pause(MAIN_ID).catch(() => {});
+      setPlaying(false);
+      const its = activeFileId ? useListenStore.getState().transcripts[activeFileId] || [] : [];
+      const startMs = its.length ? itemStartSec(its[0]) * 1000 : 0;
+      seek(MAIN_ID, startMs).catch(() => {}); // 未加载时失败无妨，下次 load 从头开始
+      setCurrentMs(startMs);
+      setProgress(0);
+      setTranscriptIdx(0);
+      setWordIdx(-1);
+      lastScrolledIdxRef.current = -1;
+      try { transcriptListRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
+    }
+    prevJobStatusRef.current = status;
+  }, [job?.status, activeFileId]);
+  // 稳定的行点击回调（通过 ref 拿到最新的 seekToTranscriptIdx），这样 renderItem
+  // 的依赖里 onPress 恒定，配合 React.memo 让非当前句的行不重渲。
+  const seekRef = useRef<(i: number) => void>(() => {});
+  const onRowPress = useCallback((i: number) => { seekRef.current(i); }, []);
 
   // Echo
   const [echoVisible, setEchoVisible] = useState(false);
@@ -117,13 +186,20 @@ export default function PlayerScreen() {
           setProgress(s.duration > 0 ? (s.position / s.duration) * 100 : 0);
           if (!s.isPlaying) setPlaying(false);
           if (items.length > 0) {
-            const idx = findTranscriptIndex(items, s.position / 1000);
+            const posSec = s.position / 1000;
+            const idx = findTranscriptIndex(items, posSec);
             if (idx >= 0) {
               setTranscriptIdx(idx);
-              // Auto-scroll transcript to follow playback
-              try {
-                transcriptListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
-              } catch {}
+              // 词级高亮：算出当前读到句内的哪个词
+              setWordIdx(activeWordIndex(items[idx], items[idx + 1], s.duration / 1000, posSec));
+              // 自动跟随：仅在句子真的换了、且用户没在手动滚动时才滑动，避免
+              // 每 200ms 把用户拽回去（那正是之前「播放时没法滚」的原因）。
+              if (idx !== lastScrolledIdxRef.current && !userScrollRef.current) {
+                lastScrolledIdxRef.current = idx;
+                try {
+                  transcriptListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+                } catch {}
+              }
             }
           }
         } catch {}
@@ -154,27 +230,31 @@ export default function PlayerScreen() {
     };
   }, []);
 
-  // ── Transcription ──
-  const startTranscription = async () => {
+  // ── Transcription（后台任务）──
+  // 只负责启动 store 里的后台任务，立即返回。上传+识别耗时较长，用户可以离开本
+  // 页去别的模块，任务不中断；回来后从 store 读取进度 / 结果。
+  const startTranscription = () => {
     if (!file?.uri || !activeFileId) return;
-    setTranscribing(true);
-    setTranscribeMsg('正在准备识别...');
-    try {
-      const result = await transcribeFile(file.uri, (msg) => setTranscribeMsg(msg), file.transcodeId);
-      useListenStore.getState().setTranscript(activeFileId, result.items);
-      if (result.remoteAudioUrl) {
-        useListenStore.getState().setRemoteAudioUrl(activeFileId, result.remoteAudioUrl);
-      }
-      if (result.localAudioUri) {
-        useListenStore.getState().setLocalAudioUri(activeFileId, result.localAudioUri);
-      }
-    } catch (e: any) {
-      console.error('STT error:', e?.message, e);
-      Alert.alert('识别失败', e?.message || '请确认音频包含韩语内容，且网络连接正常');
-    } finally {
-      setTranscribing(false);
-      setTranscribeMsg('');
-    }
+    const fileUri = file.uri;
+    const fileId = activeFileId;
+    const transcodeId = file.transcodeId;
+    const hasSubs = items.length > 0;
+    // 顶部「识别」按钮一律先弹确认框（首识别 / 重新识别文案不同）。重新识别会
+    // 覆盖现有字幕，且断句由 AI 完成、重跑结果可能与上次略有不同，故明确提示。
+    Alert.alert(
+      hasSubs ? '重新识别' : '开始识别',
+      hasSubs
+        ? '将在后台重新识别，并覆盖当前字幕。\n\n注意：断句由 AI 完成，重跑的句数 / 切分可能与上次略有不同。'
+        : '将在后台识别字幕，可能需要 1~2 分钟。期间可以返回去做别的，完成后回来查看。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: hasSubs ? '重新识别' : '开始识别',
+          style: hasSubs ? 'destructive' : 'default',
+          onPress: () => startTranscribeJob(fileId, fileUri, transcodeId),
+        },
+      ],
+    );
   };
 
   // Reset the resolved playable uri when switching files
@@ -238,19 +318,54 @@ export default function PlayerScreen() {
         await pause(MAIN_ID);
         setPlaying(false);
       } else {
-        try {
-          await loadMain();
-        } catch (e: any) {
-          console.warn('[Player] load failed:', file.uri, e?.message);
-          // Surface the real error so it can be diagnosed without a console.
-          Alert.alert('播放加载失败', `${e?.message || '未知错误'}\n\nuri: ${(file.uri || '').substring(0, 80)}\nremote: ${(file.remoteAudioUrl || '无').substring(0, 80)}`);
-          return;
+        // 已加载过就直接续播，不要再 loadMain()——load() 会把播放器重建到 0，
+        // 那正是「暂停后再播放跳回第一句」的原因。只有首次 / 切文件后才需要 load。
+        if (!playableUriRef.current) {
+          try {
+            await loadMain();
+          } catch (e: any) {
+            console.warn('[Player] load failed:', file.uri, e?.message);
+            // Surface the real error so it can be diagnosed without a console.
+            Alert.alert('播放加载失败', `${e?.message || '未知错误'}\n\nuri: ${(file.uri || '').substring(0, 80)}\nremote: ${(file.remoteAudioUrl || '无').substring(0, 80)}`);
+            return;
+          }
         }
         await play(MAIN_ID);
         setPlaying(true);
       }
     } catch (e: any) { Alert.alert('播放失败', e?.message || '无法播放该文件'); }
   };
+
+  // 手动滚动：拖动时暂停自动跟随；停手后 3 秒无操作则滑回当前播放句。
+  const onUserScrollStart = () => {
+    userScrollRef.current = true;
+    if (resumeTimerRef.current) { clearTimeout(resumeTimerRef.current); resumeTimerRef.current = null; }
+  };
+  const scheduleAutoResume = () => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => {
+      userScrollRef.current = false;
+      const idx = transcriptIdxRef.current;
+      lastScrolledIdxRef.current = idx;
+      try {
+        transcriptListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+      } catch {}
+    }, 3000);
+  };
+  useEffect(() => () => { if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current); }, []);
+
+  // App 退到后台 / 变为非活跃时暂停播放（含单句循环），避免退出程序后音频还在响。
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        stopEchoRef.current();
+        pause(MAIN_ID).catch(() => {});
+        setPlaying(false);
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const seekTo = async (ms: number) => {
     setCurrentMs(ms);
@@ -266,14 +381,32 @@ export default function PlayerScreen() {
 
   const seekToTranscriptIdx = async (index: number) => {
     setTranscriptIdx(index);
+    setWordIdx(0); // 跳到句首，词高亮从第一个词起，避免残留上一句的高亮
     const item = items[index];
     if (!item) return;
-    const [m, s] = item.time.split(':').map(Number);
-    await seekTo((m * 60 + s) * 1000);
+    await seekTo(itemStartSec(item) * 1000);
     // Start playback after seeking (tap-to-play)
     try { await play(MAIN_ID); } catch {}
     setPlaying(true);
   };
+  seekRef.current = seekToTranscriptIdx;
+
+  // 稳定的 renderItem：仅依赖 transcriptIdx / wordIdx / 两个开关，不随播放位置
+  // (currentMs) 每 tick 变化，避免整列表反复重建。
+  const renderTranscriptRow = useCallback(
+    ({ item, index }: { item: TranscriptItem; index: number }) => (
+      <TranscriptRow
+        item={item}
+        index={index}
+        isActive={index === transcriptIdx}
+        readingIdx={index === transcriptIdx ? wordIdx : -1}
+        showRomaja={showRomaja}
+        showTranslation={showTranslation}
+        onPress={onRowPress}
+      />
+    ),
+    [transcriptIdx, wordIdx, showRomaja, showTranslation, onRowPress],
+  );
 
   const changeRate = async (r: number) => {
     setSpeed(r);
@@ -298,14 +431,9 @@ export default function PlayerScreen() {
 
     if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
 
-    const [sm, ss] = item.time.split(':').map(Number);
-    const startMs = (sm * 60 + ss) * 1000;
-
-    let endMs = durationMs;
-    if (index + 1 < items.length) {
-      const [em, es] = items[index + 1].time.split(':').map(Number);
-      endMs = (em * 60 + es) * 1000;
-    }
+    const startMs = itemStartSec(item) * 1000;
+    // 单句循环用句子自己的精确 end，避免蹭到下一句 / 提前切断。
+    const endMs = itemEndSec(item, items[index + 1], durationMs / 1000) * 1000;
     // Wall-clock duration must account for playback rate: at 0.5× the segment
     // takes twice as long to play, at 2× half as long. Without this the loop
     // cut off early (slow) or ran into the next sentence (fast).
@@ -365,6 +493,7 @@ export default function PlayerScreen() {
     setEchoVisible(false);
     // Do NOT resume main playback — user dismissed the echo modal, so stop means stop
   };
+  stopEchoRef.current = stopEcho;
 
   const echoJump = (dir: -1 | 1) => {
     const ni = echoIdx + dir;
@@ -455,49 +584,88 @@ export default function PlayerScreen() {
         <Text style={[S.textSm, S.text, S.semibold, { flex: 1, marginLeft: 8 }]} numberOfLines={1}>
           {file?.name || '精听'}
         </Text>
-        <TouchableOpacity style={[S.bgAccent15, S.roundedSM, { paddingHorizontal: 10, paddingVertical: 4 }]} onPress={startTranscription}>
-          <Text style={[S.textXs, S.textAccent, S.semibold]}>识别</Text>
+        <TouchableOpacity
+          style={[S.bgAccent15, S.roundedSM, { paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 5 }]}
+          onPress={startTranscription}
+          disabled={transcribing}
+        >
+          {transcribing ? <ActivityIndicator size="small" color={C.accent} /> : null}
+          <Text style={[S.textXs, S.textAccent, S.semibold]}>{transcribing ? '识别中' : '识别'}</Text>
         </TouchableOpacity>
+        <Text style={[S.textXxs, S.text3, { marginLeft: 6 }]}>{BUILD_TAG}</Text>
       </View>
 
       {/* Transcript area */}
-      {transcribing ? (
-        <View style={[S.flex1, S.center]}><ActivityIndicator size="large" color={C.accent} /><Text style={[S.textSm, S.text2, S.mt3]}>{transcribeMsg}</Text></View>
-      ) : items.length === 0 ? (
-        <View style={[S.flex1, S.center, S.p4]}><Mic size={40} color={C.text3} /><Text style={[S.textSm, S.text3, S.mt3]}>暂无字幕</Text><TouchableOpacity style={[S.bgAccent, S.roundedFull, S.px5, { paddingVertical: 12 }, S.mt4]} onPress={startTranscription}><Text style={[S.textSm, S.textWhite, S.semibold]}>开始识别字幕 & 罗马文</Text></TouchableOpacity></View>
-      ) : (
-        <FlatList ref={transcriptListRef} style={S.flex1} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }} data={items} keyExtractor={(_, i) => i.toString()}
-          renderItem={({ item, index }) => (
-            <TouchableOpacity
-              style={[
-                S.py3, { paddingHorizontal: 12 }, S.roundedSM, S.mb1,
-                index === transcriptIdx
-                  ? { backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }
-                  : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
-              ]}
-              onPress={() => seekToTranscriptIdx(index)}
-            >
-              <Text style={[S.textXs, S.text3, S.mb1]}>{item.time}</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                {romanizeWords(item.ko).map((p, wi) => (
-                  <View key={wi} style={{ marginRight: 14, marginBottom: 6, alignItems: 'flex-start' }}>
-                    <Text style={[{ fontSize: 18, lineHeight: 26, letterSpacing: 1.5 }, index === transcriptIdx ? [S.text, S.semibold] : S.text2]}>
-                      {p.ko}
-                    </Text>
-                    {showRomaja ? (
-                      <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>
-                        {p.roma}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-              {(showTranslation || index === transcriptIdx) && item.zh ? (
-                <Text style={[S.textSm, S.text2, S.mt1]}>{item.zh}</Text>
-              ) : null}
+      {items.length === 0 ? (
+        // 还没有字幕：识别中显示全屏进度；否则显示空态 / 失败重试。
+        transcribing ? (
+          <View style={[S.flex1, S.center, S.p4]}>
+            <View style={[{ width: 72, height: 72, borderRadius: 36 }, S.bgAccent15, S.center, S.mb4]}>
+              <ActivityIndicator size="large" color={C.accent} />
+            </View>
+            <Text style={[S.text, S.semibold, { fontSize: 16 }]}>正在后台识别中…</Text>
+            <Text style={[S.textSm, S.text2, S.mt2]} numberOfLines={1}>{transcribeMsg}</Text>
+            <Text style={[S.textXs, S.textAccent, S.semibold, S.mt2]}>已识别 {elapsedSec}s · 通常 1~2 分钟</Text>
+            <Text style={[S.textXs, S.text3, S.mt4, { textAlign: 'center', lineHeight: 18 }]}>
+              识别在后台进行，你可以先返回去做别的，{'\n'}完成后回来即可查看。
+            </Text>
+            <TouchableOpacity style={[S.bgSurface2, S.roundedFull, S.px5, { paddingVertical: 10 }, S.mt4]} onPress={() => navigation.goBack()}>
+              <Text style={[S.textSm, S.textAccent, S.semibold]}>返回，后台继续识别</Text>
             </TouchableOpacity>
-          )}
-        />
+          </View>
+        ) : (
+          <View style={[S.flex1, S.center, S.p4]}>
+            <Mic size={40} color={C.text3} />
+            {job?.status === 'error' ? (
+              <>
+                <Text style={[S.textSm, S.text3, S.mt3, { textAlign: 'center' }]}>识别失败{job.error ? `：${job.error}` : ''}</Text>
+                <TouchableOpacity style={[S.bgAccent, S.roundedFull, S.px5, { paddingVertical: 12 }, S.mt4]} onPress={() => { if (activeFileId) clearTranscribeJob(activeFileId); startTranscription(); }}>
+                  <Text style={[S.textSm, S.textWhite, S.semibold]}>重试识别</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={[S.textSm, S.text3, S.mt3]}>暂无字幕</Text>
+                <TouchableOpacity style={[S.bgAccent, S.roundedFull, S.px5, { paddingVertical: 12 }, S.mt4]} onPress={startTranscription}><Text style={[S.textSm, S.textWhite, S.semibold]}>开始识别字幕 & 罗马文</Text></TouchableOpacity>
+              </>
+            )}
+          </View>
+        )
+      ) : (
+        // 已有字幕：重新识别时保留字幕不消失，只在顶部挂一条状态横幅。
+        <View style={S.flex1}>
+          {transcribing ? (
+            <View style={[S.flexRow, S.itemsCenter, { gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: 'rgba(124,92,252,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(124,92,252,0.25)' }]}>
+              <ActivityIndicator size="small" color={C.accent} />
+              <Text style={[S.textSm, S.textAccent, S.semibold, { flex: 1 }]} numberOfLines={1}>正在重新识别中… {transcribeMsg}</Text>
+              <Text style={[S.textXs, S.textAccent]}>{elapsedSec}s</Text>
+            </View>
+          ) : job?.status === 'done' ? (
+            <View style={[S.flexRow, S.itemsCenter, { gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: 'rgba(0,184,148,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(0,184,148,0.25)' }]}>
+              <CheckCircle2 size={15} color={C.green} />
+              <Text style={[S.textSm, S.semibold, { flex: 1, color: C.green }]} numberOfLines={1}>{job.message || '识别完成'}</Text>
+            </View>
+          ) : job?.status === 'error' ? (
+            // 重新识别失败：已有旧字幕仍在，但必须明确告诉用户「没在跑、失败了」，
+            // 否则会误以为还在后台识别。提供直接重试。
+            <TouchableOpacity
+              style={[S.flexRow, S.itemsCenter, { gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: 'rgba(232,67,147,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(232,67,147,0.25)' }]}
+              onPress={() => { if (activeFileId) clearTranscribeJob(activeFileId); startTranscription(); }}
+            >
+              <X size={15} color={C.pink} />
+              <Text style={[S.textSm, S.semibold, { flex: 1, color: C.pink }]} numberOfLines={1}>重新识别失败{job.error ? `：${job.error}` : ''}</Text>
+              <Text style={[S.textXs, S.semibold, { color: C.pink }]}>点此重试</Text>
+            </TouchableOpacity>
+          ) : null}
+          <FlatList ref={transcriptListRef} style={S.flex1} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }} data={items} keyExtractor={(_, i) => i.toString()}
+            extraData={`${transcriptIdx}:${wordIdx}:${showTranslation}:${showRomaja}`}
+            onScrollBeginDrag={onUserScrollStart}
+            onScrollEndDrag={scheduleAutoResume}
+            onMomentumScrollEnd={scheduleAutoResume}
+            windowSize={9}
+            renderItem={renderTranscriptRow}
+          />
+        </View>
       )}
 
       {/* ═══ Bottom control bar ═══ */}
@@ -605,9 +773,30 @@ export default function PlayerScreen() {
                     })),
                     examples: (Array.isArray(rawExp.examples) ? rawExp.examples : []).map((e: any) => String(e ?? '')),
                     usage: typeof rawExp?.usage === 'string' ? rawExp.usage : String(rawExp?.usage ?? ''),
+                    why: typeof rawExp?.why === 'string' ? rawExp.why : (rawExp?.why != null ? String(rawExp.why) : ''),
+                    chunks: (Array.isArray(rawExp.chunks) ? rawExp.chunks : []).map((c: any) => ({
+                      chunk: typeof c?.chunk === 'string' ? c.chunk : String(c?.chunk ?? ''),
+                      meaning: typeof c?.meaning === 'string' ? c.meaning : String(c?.meaning ?? ''),
+                    })).filter((c: any) => c.chunk),
+                    contractions: (Array.isArray(rawExp.contractions) ? rawExp.contractions : []).map((c: any) => ({
+                      form: typeof c?.form === 'string' ? c.form : String(c?.form ?? ''),
+                      full: typeof c?.full === 'string' ? c.full : String(c?.full ?? ''),
+                      meaning: typeof c?.meaning === 'string' ? c.meaning : String(c?.meaning ?? ''),
+                    })).filter((c: any) => c.form),
                   };
                   return (
                     <>
+                      {/* 为什么这样表达 */}
+                      {exp.why ? (
+                        <View style={[{ backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <Lightbulb size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>为什么这样表达</Text>
+                          </View>
+                          <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.why}</Text>
+                        </View>
+                      ) : null}
+
                       {/* Word-by-word */}
                       {exp.words.length > 0 && (
                         <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
@@ -669,6 +858,40 @@ export default function PlayerScreen() {
                               </View>
                             );
                           })}
+                        </View>
+                      )}
+
+                      {/* 词块 / 固定搭配 */}
+                      {exp.chunks.length > 0 && (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <Puzzle size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>词块 / 固定搭配</Text>
+                          </View>
+                          {exp.chunks.map((c: { chunk: string; meaning: string }, i: number) => (
+                            <View key={i} style={[S.flexRow, { paddingVertical: 4, borderBottomWidth: i < exp.chunks.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
+                              <Text style={[S.textSm, S.text, S.bold, { minWidth: 110 }]}>{c.chunk}</Text>
+                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* 缩写还原（口语缩略 → 原型）*/}
+                      {exp.contractions.length > 0 && (
+                        <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mb2]}>
+                          <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb2]}>
+                            <Scissors size={14} color={C.accent} />
+                            <Text style={[S.textXs, S.textAccent, S.semibold]}>缩写还原</Text>
+                          </View>
+                          {exp.contractions.map((c: { form: string; full: string; meaning: string }, i: number) => (
+                            <View key={i} style={[S.flexRow, S.itemsCenter, { paddingVertical: 4, borderBottomWidth: i < exp.contractions.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
+                              <Text style={[S.textSm, S.text, S.bold]}>{c.form}</Text>
+                              <Text style={[S.textXs, S.text3, { marginHorizontal: 6 }]}>→</Text>
+                              <Text style={[S.textSm, S.text, S.semibold, { minWidth: 70 }]}>{c.full}</Text>
+                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
+                            </View>
+                          ))}
                         </View>
                       )}
 
@@ -804,10 +1027,102 @@ export default function PlayerScreen() {
   );
 }
 
-function findTranscriptIndex(items: { time: string }[], posSec: number): number {
+// ── 单句行（React.memo）──
+// 关键性能点：词高亮的 wordIdx 播放时几乎每 tick 变一次。若整列表跟着重渲，
+// romanizeWords 会对每个可见行反复重算 → 滚动卡死、高亮刷不出。memo 后，非当前
+// 句的行(isActive=false, readingIdx=-1)props 不变 → 不重渲；只有「当前句」这一
+// 行在词推进时重渲，代价极小。
+interface TranscriptRowProps {
+  item: TranscriptItem;
+  index: number;
+  isActive: boolean;
+  readingIdx: number; // 当前读到句内第几个词；-1 表示本行不高亮任何词
+  showRomaja: boolean;
+  showTranslation: boolean;
+  onPress: (index: number) => void;
+}
+const TranscriptRow = memo(function TranscriptRow({
+  item, index, isActive, readingIdx, showRomaja, showTranslation, onPress,
+}: TranscriptRowProps) {
+  const words = useMemo(() => romanizeWords(item.ko), [item.ko]);
+  return (
+    <TouchableOpacity
+      style={[
+        S.py3, { paddingHorizontal: 12 }, S.roundedSM, S.mb1,
+        isActive
+          ? { backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }
+          : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
+      ]}
+      onPress={() => onPress(index)}
+    >
+      <Text style={[S.textXs, S.text3, S.mb1]}>{item.time}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {words.map((p, wi) => {
+          const isReading = isActive && wi === readingIdx;
+          return (
+            <View key={wi} style={{ marginRight: 14, marginBottom: 6, alignItems: 'flex-start' }}>
+              {/* 边框只包韩文，不含罗马音；不改背景。边框常驻（非高亮时透明），
+                  避免高亮切换时布局跳动。 */}
+              <View style={{
+                borderWidth: 1.5,
+                borderColor: isReading ? C.accent : 'transparent',
+                borderRadius: 6,
+                paddingHorizontal: 4,
+                marginHorizontal: -4,
+              }}>
+                <Text style={[
+                  { fontSize: 18, lineHeight: 26, letterSpacing: 1.5 },
+                  isActive ? [S.text, S.semibold] : S.text2,
+                  isReading ? { color: C.accent } : null,
+                ]}>
+                  {p.ko}
+                </Text>
+              </View>
+              {showRomaja ? (
+                <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>{p.roma}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+      {(showTranslation || isActive) && item.zh ? (
+        <Text style={[S.textSm, S.text2, S.mt1]}>{item.zh}</Text>
+      ) : null}
+    </TouchableOpacity>
+  );
+});
+
+function findTranscriptIndex(items: TranscriptItem[], posSec: number): number {
+  // LRC 式高亮：命中「起点 <= 当前位置」的最后一句（用精确的秒级 start）。
   for (let i = items.length - 1; i >= 0; i--) {
-    const [m, s] = items[i].time.split(':').map(Number);
-    if (m * 60 + s <= posSec) return i;
+    if (itemStartSec(items[i]) <= posSec) return i;
   }
   return 0;
+}
+
+// 卡拉OK式词级高亮：在句子的精确 [start,end] 区间内，按每个词的字符数比例
+// 分配时长，算出当前 posSec 读到句内第几个词。用比例法（而非真实逐词时间戳）
+// 是有意为之——高亮足够顺滑，且无需改数据结构 / 重新识别旧素材。
+function activeWordIndex(
+  item: TranscriptItem | undefined,
+  next: TranscriptItem | undefined,
+  durSec: number,
+  posSec: number,
+): number {
+  if (!item) return -1;
+  const tokens = (item.ko || '').split(/\s+/).filter(Boolean);
+  if (!tokens.length) return -1;
+  const start = itemStartSec(item);
+  const end = itemEndSec(item, next, durSec);
+  const span = end - start;
+  if (span <= 0) return -1;
+  const frac = Math.min(Math.max((posSec - start) / span, 0), 0.9999);
+  const lens = tokens.map((t) => Math.max((t.match(/[0-9A-Za-z가-힣]/g) || []).length, 1));
+  const total = lens.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    acc += lens[i];
+    if (frac < acc / total) return i;
+  }
+  return tokens.length - 1;
 }

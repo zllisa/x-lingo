@@ -1,9 +1,10 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronUp, Circle, Copy, Eye, EyeOff, Languages, Lightbulb, Mic, Pause, Pencil, Play, RotateCcw, Send, Square, Theater, X } from 'lucide-react-native';
+import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronUp, Circle, Copy, Eye, EyeOff, Languages, Lightbulb, Lock, Mic, Pencil, RotateCcw, Send, Theater, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, PermissionsAndroid, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AudioRecorderPlayer, { AVEncoderAudioQualityIOSType, AVEncodingOption, AudioEncoderAndroidType, AudioSourceAndroidType, OutputFormatAndroidType, type AudioSet } from 'react-native-audio-recorder-player';
+import { ActivityIndicator, Alert, Animated, FlatList, KeyboardAvoidingView, PanResponder, PermissionsAndroid, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player'; // 仅用于 TTS 播放
+import AudioRecord from 'react-native-audio-record-plus'; // 录音：直出 WAV/PCM，供 Azure 识别
 import Config from 'react-native-config';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AI_FALLBACK_REPLIES } from '../../constants/mockData';
@@ -21,12 +22,55 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const fmtSec = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+// 录音中气泡里的动态波形（装饰性动画，表示「正在聆听」）。
+function Waveform({ color, bars = 22 }: { color: string; bars?: number }) {
+  const vals = useRef([...Array(bars)].map(() => new Animated.Value(0.3))).current;
+  useEffect(() => {
+    const anims = vals.map((v, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration: 260 + (i % 6) * 55, useNativeDriver: false }),
+          Animated.timing(v, { toValue: 0.22, duration: 260 + (i % 6) * 55, useNativeDriver: false }),
+        ]),
+      ),
+    );
+    Animated.stagger(45, anims).start();
+    return () => anims.forEach(a => a.stop());
+  }, []);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: 34, gap: 3 }}>
+      {vals.map((v, i) => (
+        <Animated.View
+          key={i}
+          style={{ width: 3, borderRadius: 2, backgroundColor: color, height: v.interpolate({ inputRange: [0, 1], outputRange: [5, 30] }) }}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function ChatScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { chatHistory, addMessage, voiceState, setVoiceState, setVoiceDraftText, resetVoice, completedTaskIds, toggleTask, activeScenario, setCompletedTasks } = useSpeakStore();
   const [showTasks, setShowTasks] = useState(true);
   const [recSeconds, setRecSeconds] = useState(0);
+
+  // ── 微信式语音手势状态 ──
+  // holdMode: idle=待命 / holding=按住录音中 / locked=右滑锁定后免持录音 /
+  //           recognizing=识别中 / confirm=识别完成、气泡显示文字待发送
+  // slideHint: 按住拖动的意向 none=会发送 / cancel=左滑会取消 / lock=右滑会锁定
+  // 手势里读的是 ref（PanResponder 只创建一次、闭包拿不到最新 state）。
+  type HoldMode = 'idle' | 'holding' | 'locked' | 'recognizing' | 'confirm';
+  const [holdMode, setHoldModeState] = useState<HoldMode>('idle');
+  const holdModeRef = useRef<HoldMode>('idle');
+  const setHoldMode = (m: HoldMode) => { holdModeRef.current = m; setHoldModeState(m); };
+  const [slideHint, setSlideHintState] = useState<'none' | 'cancel' | 'lock'>('none');
+  const slideHintRef = useRef<'none' | 'cancel' | 'lock'>('none');
+  const setSlideHint = (h: 'none' | 'cancel' | 'lock') => { if (slideHintRef.current !== h) { slideHintRef.current = h; setSlideHintState(h); } };
+  const recStartRef = useRef(0);
+  const [recognizedText, setRecognizedText] = useState(''); // confirm 气泡里的识别文字
+  const [recogError, setRecogError] = useState('');         // 识别失败/为空时的提示
 
   // Recording timer — tick while recording.
   useEffect(() => {
@@ -62,7 +106,7 @@ export default function ChatScreen() {
     setVoiceDraft('');
     setEditedDraft('');
     return () => {
-      try { audio.current.stopRecorder(); } catch {}
+      try { AudioRecord.stop(); } catch {}
       try { audio.current.stopPlayer(); } catch {}
     };
   }, []);
@@ -173,44 +217,31 @@ export default function ChatScreen() {
       } catch (e) { /* continue */ }
     }
     try {
-      // Pass a bare filename — the native module resolves it inside the app's
-      // caches dir and returns the real file:// URL. Passing an absolute path
-      // makes iOS re-append it onto the caches dir (broken nested path).
-      const ext = Platform.OS === 'ios' ? 'm4a' : 'mp4';
-      const fileName = `record_${Date.now()}.${ext}`;
-      // 16 kHz mono AAC is ideal for Whisper, but the lib defaults the bitrate to
-      // 128000 — an impossible combo at 16 kHz that makes record() return false.
-      // Pin a valid speech bitrate so AVAudioRecorder can prepare.
-      const audioSet: AudioSet = {
-        AVFormatIDKeyIOS: AVEncodingOption.aac,
-        AVSampleRateKeyIOS: 16000,
-        AVNumberOfChannelsKeyIOS: 1,
-        AVEncoderAudioQualityKeyIOS: AVEncoderAudioQualityIOSType.high,
-        AVEncoderBitRateKeyIOS: 32000,
-        AudioSourceAndroid: AudioSourceAndroidType.MIC,
-        OutputFormatAndroid: OutputFormatAndroidType.MPEG_4,
-        AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
-        AudioSamplingRateAndroid: 16000,
-        AudioChannelsAndroid: 1,
-        AudioEncodingBitRateAndroid: 32000,
-      };
-      // Stop any TTS playback and let the audio session settle before recording.
+      // 先停掉 TTS 播放，让音频会话能切到录音（AudioRecord.start 会主动把
+      // AVAudioSession 设成 playAndRecord —— 这也是这个库能和 TTS 共存的关键）。
       try { await audio.current.stopPlayer(); } catch {}
-      await new Promise(r => setTimeout(r, 150));
-      let uri: string;
-      try {
-        uri = await audio.current.startRecorder(fileName, audioSet);
-      } catch (inner) {
-        // Fallback: let the library use its own default settings (44.1 kHz).
-        console.warn('startRecorder custom config failed, retrying with defaults:', inner);
-        uri = await audio.current.startRecorder(fileName);
-      }
-      recordingPath.current = uri; // resolved file:// URL (iOS) / path (Android)
+      try { audio.current.removePlayBackListener(); } catch {}
+      setPlayingMessageId(null);
+      await new Promise(r => setTimeout(r, 120));
+
+      // 录成 16k / 单声道 / 16-bit 的【真 WAV】（RIFF 头在最前），Azure 短音频
+      // REST 原生支持、秒解 —— 彻底绕开 iPhone m4a「moov 在末尾」流式解不了的坑。
+      const wavName = `speak_${Date.now()}.wav`;
+      AudioRecord.init({
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+        audioSource: 6, // Android: VOICE_RECOGNITION；iOS 忽略此项
+        wavFile: wavName,
+      });
+      AudioRecord.start({ category: 'playAndRecord' });
+      recordingPath.current = null; // 真实路径在 stop() 时才拿到
       setVoiceState('recording');
     } catch (e: any) {
       const msg = e?.message || String(e);
       console.warn('startRecording error:', msg);
       recordingPath.current = null;
+      setHoldMode('idle'); // 录音起不来时把手势状态复位，避免卡在 holding
       if (msg.includes('perm') || msg.includes('auth') || msg.includes('denied')) {
         Alert.alert('麦克风未授权', '请到 设置 > 隐私与安全性 > 麦克风 中允许 x-lingo');
       } else {
@@ -219,37 +250,58 @@ export default function ChatScreen() {
     }
   };
 
-  const pauseRecording = async () => { try { await audio.current.pauseRecorder(); setVoiceState('paused'); } catch {} };
-  const resumeRecording = async () => { try { await audio.current.resumeRecorder(); setVoiceState('recording'); } catch {} };
-
   const stopAndTranscribe = async () => {
-    let stopped: string | undefined;
+    // 松手即进入「识别中」态：气泡显示转圈，避免松手后一段空白间隔看不到反馈。
+    setHoldMode('recognizing');
+    setVoiceState('ready'); // 停掉录音计时器（voiceState!=='recording'）
+    let raw = '';
     try {
-      stopped = await audio.current.stopRecorder();
-    } catch {}
-    // Prefer stopRecorder's return; fall back to the URI captured at start.
-    const raw = (stopped && stopped !== 'Already stopped' ? stopped : recordingPath.current) || '';
+      raw = (await AudioRecord.stop()) || ''; // 返回录好的 WAV 文件路径
+    } catch (e) { console.warn('[Speak REC] stop error:', e); }
     recordingPath.current = null;
-    const uri = raw.startsWith('file://') || raw.startsWith('/') ? raw : '';
+    // 归一成 readFile 能用的路径（file:// 或绝对路径都可）。
+    const uri = raw.startsWith('file://') || raw.startsWith('/') ? raw : (raw ? `file://${raw}` : '');
+    const AZURE_KEY = Config.PUBLIC_AZURE_TTS_KEY;
     const GROQ_KEY = Config.PUBLIC_GROQ_API_KEY;
-    if (GROQ_KEY && uri) {
-      try {
-        const { whisperSTT } = await import('../../services/whisperSTT');
-        const text = (await whisperSTT(uri)).trim();
-        if (!text) {
-          // Nothing recognized — let the user just re-record. Don't fabricate
-          // content, which would mislead.
-          resetVoice();
-          Alert.alert('没识别到', '没听清，请再说一遍～');
-          return;
-        }
-        setEditedDraft(text); setVoiceDraft(text); setVoiceDraftText(text);
-        setVoiceState('reviewing'); return;
-      } catch (e) { console.warn('STT error:', e); }
+    console.log('[Speak STT] wav uri:', uri);
+
+    let text = '';
+    let sttRan = false;
+    let sttErrored = false;
+    if (uri) {
+      // 首选 Azure：录音已是真 WAV，Azure 短音频 REST 原生支持、秒解（国内可用，
+      // 复用精听同一套 key）。失败才回落 Groq。
+      if (AZURE_KEY) {
+        sttRan = true;
+        try {
+          const { azureSTTWithTimestamps } = await import('../../services/azureSTT');
+          const segs = await azureSTTWithTimestamps(uri);
+          text = segs.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+          console.log('[Speak STT] Azure text:', text || '(empty)');
+        } catch (e) { sttErrored = true; console.warn('[Speak STT] Azure error:', e); }
+      }
+      // Azure 失败 / 为空 → 回落 Groq（墙外可用）。
+      if (!text && GROQ_KEY) {
+        sttRan = true;
+        try {
+          const { whisperSTT } = await import('../../services/whisperSTT');
+          text = (await whisperSTT(uri)).trim();
+          console.log('[Speak STT] Groq text:', text || '(empty)');
+        } catch (e) { sttErrored = true; console.warn('[Speak STT] Groq error:', e); }
+      }
     }
-    // STT unavailable/failed → let the user type instead of fabricating text
-    setEditedDraft(''); setVoiceDraft(''); setVoiceDraftText('');
-    setVoiceState('reviewing');
+
+    // 识别完成 → 气泡转成文字（confirm 态），由用户点「发送」发出（微信式）。
+    if (text) {
+      setRecogError('');
+      setRecognizedText(text);
+      setHoldMode('confirm');
+      return;
+    }
+    // 没听到内容 / 出错 → confirm 态显示提示，只给「取消」。
+    setRecognizedText('');
+    setRecogError(uri && sttRan && !sttErrored ? '没听清，请再说一遍～' : '识别失败，请重试');
+    setHoldMode('confirm');
   };
 
   const handleSendDraft = () => {
@@ -259,7 +311,55 @@ export default function ChatScreen() {
     sendToAI(t);
   };
 
-  const handleCancel = () => { resetVoice(); setVoiceDraft(''); setEditedDraft(''); setRecSeconds(0); };
+  const handleCancel = () => {
+    try { AudioRecord.stop(); } catch {} // 真正停掉录音并丢弃结果
+    setHoldMode('idle'); setSlideHint('none'); setRecognizedText(''); setRecogError('');
+    resetVoice(); setVoiceDraft(''); setEditedDraft(''); setRecSeconds(0);
+  };
+
+  // confirm 气泡里点「发送」：把识别到的文字发给 AI。
+  const confirmSend = () => {
+    const t = recognizedText.trim();
+    setHoldMode('idle'); setRecognizedText(''); setRecogError('');
+    resetVoice(); setVoiceDraft(''); setEditedDraft(''); setRecSeconds(0);
+    if (t) sendToAI(t);
+  };
+
+  // ── 微信式：按住说话，左滑取消 / 右滑锁定，松手→识别→气泡转文字→发送 ──
+  // 阈值：左滑 80px 取消、右滑 80px 锁定；松手 <400ms 视为误触丢弃。
+  const CANCEL_DX = -80;
+  const LOCK_DX = 80;
+  const panHandlers = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      if (holdModeRef.current !== 'idle') return;
+      recStartRef.current = Date.now();
+      setSlideHint('none');
+      setHoldMode('holding');
+      startRecording();
+    },
+    onPanResponderMove: (_evt, g) => {
+      if (holdModeRef.current !== 'holding') return;
+      if (g.dx < CANCEL_DX) setSlideHint('cancel');
+      else if (g.dx > LOCK_DX) setSlideHint('lock');
+      else setSlideHint('none');
+    },
+    onPanResponderRelease: () => {
+      if (holdModeRef.current !== 'holding') return;
+      const hint = slideHintRef.current;
+      const heldMs = Date.now() - recStartRef.current;
+      setSlideHint('none');
+      if (hint === 'cancel') { handleCancel(); return; }
+      if (hint === 'lock') { setHoldMode('locked'); return; } // 免持，录音继续，等点发送
+      if (heldMs < 400) { handleCancel(); return; } // 误触，丢弃
+      stopAndTranscribe(); // → recognizing → confirm
+    },
+    onPanResponderTerminate: () => {
+      if (holdModeRef.current !== 'holding') return;
+      handleCancel();
+    },
+  })).current;
 
   const handleWordPress = (word: string) => {
     const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
@@ -337,66 +437,113 @@ export default function ChatScreen() {
           ListEmptyComponent={<View style={[S.center, { paddingVertical: 80 }]}><Text style={[S.textSm, S.text3]}>开始你的韩语对话吧</Text></View>}
         />
 
-        {/* Voice surface — one cohesive panel that morphs across states */}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: 20, paddingTop: 18, paddingBottom: insets.bottom + 16 }]}>
-            {voiceState === 'ready' ? (
-              // ── Idle: tap mic to start ──
-              <View style={S.itemsCenter}>
-                <TouchableOpacity style={[S.w14, S.roundedFull, S.bgAccent, S.center, S.shadow]} onPress={startRecording}>
-                  <Mic size={26} color="#fff" />
-                </TouchableOpacity>
-                <Text style={[S.textXxs, S.text3, { marginTop: 8 }]}>点麦克风，说韩语</Text>
-              </View>
-            ) : voiceState === 'reviewing' ? (
-              // ── Review / confirm what was recognized ──
-              <View>
-                <Text style={[S.textXs, S.text3, { marginBottom: 8 }]}>确认内容 · 可编辑后发送</Text>
-                <TextInput
-                  ref={draftInputRef}
-                  style={[S.bgSurface2, S.border, S.roundedSM, S.px4, S.py3, S.textBase, S.text, S.leading6, { minHeight: 60 }]}
-                  value={editedDraft}
-                  onChangeText={setEditedDraft}
-                  multiline
-                  placeholder="(可点此输入)"
-                  placeholderTextColor={C.text3}
-                />
-                <View style={[S.row, S.gap2, S.mt3]}>
-                  <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.border, S.flexRow, S.justifyCenter, S.gap1]} onPress={() => { setEditedDraft(''); startRecording(); setVoiceState('recording'); }}>
-                    <RotateCcw size={15} color={C.text} /><Text style={[S.textSm, S.text, S.semibold]}>重录</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.border, S.flexRow, S.justifyCenter, S.gap1]} onPress={() => draftInputRef.current?.focus()}>
-                    <Pencil size={15} color={C.text} /><Text style={[S.textSm, S.text, S.semibold]}>编辑</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[S.flex1, S.py25, S.roundedFull, S.bgAccent, S.flexRow, S.justifyCenter, S.gap1]} onPress={handleSendDraft}>
-                    <Send size={15} color="#fff" /><Text style={[S.textSm, S.textWhite, S.semibold]}>发送</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              // ── Recording / paused — same surface, no jump ──
-              <View style={S.itemsCenter}>
-                <View style={[S.flexRow, S.itemsCenter, S.gap2, { marginBottom: 16 }]}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: voiceState === 'recording' ? '#e17055' : C.text3 }} />
-                  <Text style={[S.textBase, S.semibold, S.text]}>{fmtSec(recSeconds)}</Text>
-                  <Text style={[S.textXs, S.text3]}>{voiceState === 'recording' ? '正在聆听…' : '已暂停'}</Text>
-                </View>
-                <View style={[S.row, S.itemsCenter, S.justifyCenter, S.gap5]}>
-                  <TouchableOpacity style={[{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: C.border }, S.center]} onPress={handleCancel}>
-                    <X size={20} color={C.text2} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.accent }, S.center]} onPress={voiceState === 'recording' ? pauseRecording : resumeRecording}>
-                    {voiceState === 'recording' ? <Pause size={22} color="#fff" fill="#fff" /> : <Play size={22} color="#fff" fill="#fff" />}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#7c5cfc' }, S.center]} onPress={stopAndTranscribe}>
-                    <Square size={20} color="#fff" fill="#fff" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[S.textXxs, S.text3, { marginTop: 12 }]}>取消 · 暂停 · 完成</Text>
-              </View>
-            )}
+        {/* 底部入口：按住说话（手势起点，全程 PanResponder 在这里） */}
+        <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: 20, paddingTop: 14, paddingBottom: insets.bottom + 14 }]}>
+          <View {...panHandlers.panHandlers} style={[S.itemsCenter, { paddingVertical: 6 }]}>
+            <View style={[S.w14, S.roundedFull, S.bgAccent, S.center, S.shadow]}>
+              <Mic size={26} color="#fff" />
+            </View>
+            <Text style={[S.textXxs, S.text3, { marginTop: 8 }]}>按住说话 · 左滑取消 · 右滑锁定</Text>
           </View>
-        </KeyboardAvoidingView>
+        </View>
+
+        {/* ── 微信式语音浮层：录音波形 → 识别中 → 气泡转文字 → 发送 ── */}
+        {holdMode !== 'idle' && (
+          <View
+            pointerEvents={holdMode === 'confirm' || holdMode === 'locked' ? 'auto' : 'none'}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' }}
+          >
+            {/* 中间区：气泡 + 计时/提示 */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+              <View style={{
+                maxWidth: '86%', minWidth: 130, borderRadius: 20, paddingHorizontal: 22, paddingVertical: 18,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: holdMode === 'confirm' ? '#fff' : (slideHint === 'cancel' ? C.pink : C.accent),
+              }}>
+                {holdMode === 'holding' || holdMode === 'locked' ? (
+                  <Waveform color="#fff" />
+                ) : holdMode === 'recognizing' ? (
+                  <View style={[S.flexRow, S.itemsCenter, S.gap2]}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={[S.textSm, S.textWhite, S.semibold]}>识别中…</Text>
+                  </View>
+                ) : (
+                  <Text style={[{ fontSize: 16, lineHeight: 24 }, recognizedText ? [S.text, S.semibold] : S.text3]}>
+                    {recognizedText || recogError}
+                  </Text>
+                )}
+              </View>
+
+              {(holdMode === 'holding' || holdMode === 'locked') ? (
+                <Text style={[S.textSm, { color: '#fff', marginTop: 14 }]}>{fmtSec(recSeconds)}</Text>
+              ) : null}
+              {holdMode === 'holding' ? (
+                <Text style={[S.textXs, { marginTop: 10, color: slideHint === 'cancel' ? C.pink : slideHint === 'lock' ? C.accent : 'rgba(255,255,255,0.75)' }]}>
+                  {slideHint === 'cancel' ? '松手取消' : slideHint === 'lock' ? '松手锁定（免持）' : '松手发送 · 左滑取消 · 右滑锁定'}
+                </Text>
+              ) : null}
+              {holdMode === 'locked' ? (
+                <Text style={[S.textXs, { marginTop: 10, color: 'rgba(255,255,255,0.6)' }]}>免持录音中 · 说完点发送</Text>
+              ) : null}
+            </View>
+
+            {/* 底部操作区 */}
+            {holdMode === 'holding' ? (
+              // 左「取消」 / 右「锁定」两个区（微信式），滑到哪个哪个高亮
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 44, paddingBottom: insets.bottom + 40 }}>
+                <View style={S.itemsCenter}>
+                  <View style={{
+                    width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: slideHint === 'cancel' ? C.pink : 'rgba(255,255,255,0.14)',
+                    borderWidth: 1, borderColor: slideHint === 'cancel' ? C.pink : 'rgba(255,255,255,0.4)',
+                    transform: [{ scale: slideHint === 'cancel' ? 1.15 : 1 }],
+                  }}>
+                    <X size={26} color="#fff" />
+                  </View>
+                  <Text style={[S.textXxs, { color: '#fff', marginTop: 8 }]}>取消</Text>
+                </View>
+                <View style={S.itemsCenter}>
+                  <View style={{
+                    width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: slideHint === 'lock' ? C.accent : 'rgba(255,255,255,0.14)',
+                    borderWidth: 1, borderColor: slideHint === 'lock' ? C.accent : 'rgba(255,255,255,0.4)',
+                    transform: [{ scale: slideHint === 'lock' ? 1.15 : 1 }],
+                  }}>
+                    <Lock size={24} color="#fff" />
+                  </View>
+                  <Text style={[S.textXxs, { color: '#fff', marginTop: 8 }]}>锁定</Text>
+                </View>
+              </View>
+            ) : holdMode === 'locked' ? (
+              // 免持：取消 / 发送（点发送 → 停止录音 → 识别）
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 40, paddingBottom: insets.bottom + 40 }}>
+                <TouchableOpacity style={[{ width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }, S.center]} onPress={handleCancel}>
+                  <X size={24} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={[{ width: 68, height: 68, borderRadius: 34, backgroundColor: C.accent }, S.center]} onPress={() => stopAndTranscribe()}>
+                  <Send size={28} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : holdMode === 'confirm' ? (
+              // 识别完成：取消 / 发送
+              <View style={{ alignItems: 'center', paddingBottom: insets.bottom + 40 }}>
+                <View style={[S.row, S.itemsCenter, S.justifyCenter, { gap: 40 }]}>
+                  <TouchableOpacity style={[{ width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }, S.center]} onPress={handleCancel}>
+                    <X size={24} color="#fff" />
+                  </TouchableOpacity>
+                  {recognizedText ? (
+                    <TouchableOpacity style={[{ width: 68, height: 68, borderRadius: 34, backgroundColor: C.accent }, S.center]} onPress={confirmSend}>
+                      <Send size={28} color="#fff" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <Text style={[S.textXs, { color: 'rgba(255,255,255,0.6)', marginTop: 12 }]}>
+                  {recognizedText ? '取消 · 发送' : '点 ✕ 关闭后按住重说'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
     </View>
   );
 }
