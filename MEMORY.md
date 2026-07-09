@@ -1,1 +1,2 @@
 - [Always ask before coding](.claude/memory/always-ask-before-coding.md) — 写代码前必须先给方案等用户批准
+- [Grammar book feature](.claude/memory/grammar-book-feature.md) — 语法 tab 加"语法书"分类 + 两遍法 OCR 导入 TOPIK 教材的方案与数据模型

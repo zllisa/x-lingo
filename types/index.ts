@@ -136,6 +136,40 @@ export interface GrammarPoint {
   savedAt: number;
 }
 
+// === 语法书（教材导入）===
+export interface GrammarExample {
+  ko: string;                 // 韩文例句
+  zh: string;                 // 中文翻译
+  zhSrc?: 'ocr' | 'ai';       // 译文来源：ocr = 原书 OCR，ai = AI 补译
+  exam?: string;              // TOPIK 真题回数，如 "36回"
+}
+
+export interface GrammarSense {
+  label: string;              // 义项标签，如 "说明1"
+  text: string;               // 义项释义
+}
+
+export interface GrammarTable {
+  title?: string;             // 表标题，如 "TOPIK I 必考连接词尾"
+  headers?: string[];         // 表头，如 ["关系", "连接词尾"]
+  rows: string[][];           // 每行的单元格
+}
+
+export interface GrammarEntry {
+  id: string;
+  no: number;                 // 书中编号
+  title: string;              // 语法点/助词，如 "에서"
+  pattern?: string;           // 句型（接续公式），可选
+  explanation: string;        // 说明
+  senses?: GrammarSense[];    // 多义项（说明1/2/3），可选
+  tables?: GrammarTable[];    // 对照表（如连接词尾分类表），可选
+  examples: GrammarExample[];
+  note?: { text: string; examples?: GrammarExample[] };  // 注意
+  unit: string;               // 所属单元，如 "Unit 5 格助词"
+  book: string;               // 教材名
+  savedAt?: number;           // 收藏进「我收藏的」时的时间戳
+}
+
 // === Profile Module ===
 export interface UserProfile {
   nickname: string;

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LibTab, WordSection, Word, SavedSentence, GrammarPoint } from '../types';
+import { LibTab, WordSection, Word, SavedSentence, GrammarPoint, GrammarEntry } from '../types';
 import { useAuthStore } from './useAuthStore';
 import { syncVocabularyToCloud, loadVocabularyFromCloud, syncSentencesToCloud, loadSentencesFromCloud } from '../lib/sync';
 
@@ -9,6 +9,7 @@ interface LibraryStore {
   words: Word[];
   sentences: SavedSentence[];
   grammarPoints: GrammarPoint[];
+  savedGrammarEntries: GrammarEntry[];   // 从语法书 ⭐ 收藏的完整条目
   wordSectionsCollapsed: Record<string, boolean>;
   sentenceSectionsCollapsed: Record<string, boolean>;
   currentTab: LibTab;
@@ -19,6 +20,8 @@ interface LibraryStore {
   addWord: (w: Word) => void;
   addSentence: (s: SavedSentence) => void;
   addGrammar: (g: GrammarPoint) => void;
+  toggleSaveGrammarEntry: (e: GrammarEntry) => void;   // 语法书条目 收藏/取消
+  isGrammarEntrySaved: (id: string) => boolean;
   toggleMastered: (wordId: string) => void;
   setTab: (tab: LibTab) => void;
   setFilter: (f: string) => void;
@@ -32,10 +35,11 @@ interface LibraryStore {
 
 export const useLibraryStore = create<LibraryStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       words: [],
       sentences: [],
       grammarPoints: [],
+      savedGrammarEntries: [],
       wordSectionsCollapsed: {},
       sentenceSectionsCollapsed: {},
       currentTab: 'words',
@@ -59,6 +63,14 @@ export const useLibraryStore = create<LibraryStore>()(
         const grammarPoints = [g, ...s.grammarPoints.filter((x) => x.ko !== g.ko)];
         return { grammarPoints };
       }),
+      toggleSaveGrammarEntry: (e) => set((s) => {
+        const exists = s.savedGrammarEntries.some((x) => x.id === e.id);
+        const savedGrammarEntries = exists
+          ? s.savedGrammarEntries.filter((x) => x.id !== e.id)
+          : [{ ...e, savedAt: Date.now() }, ...s.savedGrammarEntries];
+        return { savedGrammarEntries };
+      }),
+      isGrammarEntrySaved: (id) => get().savedGrammarEntries.some((x) => x.id === id),
       toggleMastered: (id) =>
         set((s) => ({
           words: s.words.map((w) => (w.id === id ? { ...w, mastered: !w.mastered } : w)),
@@ -96,10 +108,10 @@ export const useLibraryStore = create<LibraryStore>()(
     }),
     {
       name: 'library-store',
-      version: 2,
+      version: 3,
       migrate: (_persisted: any) => {
-        if (!_persisted) return { words: [], sentences: [], grammarPoints: [], wordSectionsCollapsed: {}, sentenceSectionsCollapsed: {}, currentTab: 'words', currentFilter: 'all', currentSort: 'newest', searchQuery: '' };
-        return { ..._persisted, grammarPoints: _persisted.grammarPoints || [] };
+        if (!_persisted) return { words: [], sentences: [], grammarPoints: [], savedGrammarEntries: [], wordSectionsCollapsed: {}, sentenceSectionsCollapsed: {}, currentTab: 'words', currentFilter: 'all', currentSort: 'newest', searchQuery: '' };
+        return { ..._persisted, grammarPoints: _persisted.grammarPoints || [], savedGrammarEntries: _persisted.savedGrammarEntries || [] };
       },
       storage: {
         getItem: async (k) => { const v = await AsyncStorage.getItem(k); return v ? JSON.parse(v) : null; },
@@ -110,6 +122,7 @@ export const useLibraryStore = create<LibraryStore>()(
         words: state.words,
         sentences: state.sentences,
         grammarPoints: state.grammarPoints,
+        savedGrammarEntries: state.savedGrammarEntries,
         wordSectionsCollapsed: state.wordSectionsCollapsed,
         sentenceSectionsCollapsed: state.sentenceSectionsCollapsed,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
