@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, FlatList, TextInput, Modal, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageCircle, Headphones, FolderOpen, Type, Volume2, Lightbulb, FileText, MapPin, CheckCircle2, Circle, BookOpen, Star, ChevronRight, ChevronDown, GraduationCap, X } from 'lucide-react-native';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Word, GrammarLevel, GrammarEntry, GrammarPoint, GrammarTable } from '../../types';
@@ -139,12 +139,25 @@ export default function LibraryScreen() {
   const q = searchQuery.trim().toLowerCase();
   const matchEntry = (e: GrammarEntry) =>
     !q || e.title.toLowerCase().includes(q) || e.explanation.toLowerCase().includes(q) ||
+    e.title.replace(/[/·\s\-]/g, '').toLowerCase().includes(q.replace(/[/·\s\-]/g, '')) ||
     e.no.toString().includes(q) ||
-    e.examples.some(x => x.ko.toLowerCase().includes(q) || x.zh.toLowerCase().includes(q));
+    e.examples.some(x => x.zh.toLowerCase().includes(q));
   // 语法书按 Unit 分组
   const bookByUnit = GRAMMAR_BOOK.filter(matchEntry).reduce((acc, e) => {
     (acc[e.unit] = acc[e.unit] || []).push(e); return acc;
   }, {} as Record<string, GrammarEntry[]>);
+
+  // 搜索命中时自动展开对应 group
+  useEffect(() => {
+    if (!q) return;
+    setUnitsCollapsed(s => {
+      const next = { ...s };
+      for (const [unit, entries] of Object.entries(bookByUnit)) {
+        if (entries.length > 0) next[unit] = false;
+      }
+      return next;
+    });
+  }, [q]);
 
   const renderEntryCard = (e: GrammarEntry) => {
     const saved = savedIds.has(e.id);
