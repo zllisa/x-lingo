@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useProfileStore } from '../stores/useProfileStore';
 import { useLibraryStore } from '../stores/useLibraryStore';
+import { useListenStore } from '../stores/useListenStore';
+import { useSpeakStore } from '../stores/useSpeakStore';
 import { S } from '../utils/theme';
 import TabLayout from './(tabs)/_layout';
 import ChatScreen from './speak/chat';
@@ -50,6 +52,8 @@ export default function App() {
       useProfileStore.getState().loadCheckinsFromCloud();
       useLibraryStore.getState().loadWordsFromCloud();
       useLibraryStore.getState().loadSentencesFromCloud();
+      useListenStore.getState().loadFromCloud();
+      useSpeakStore.getState().loadFromCloud();
     }
   }, [isLoggedIn]);
 

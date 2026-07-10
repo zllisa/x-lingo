@@ -121,19 +121,28 @@ export async function deepSeekGenerateScenario(description: string, level?: Spea
 
 function buildScenarioSystemPrompt(scenario: TopicScenario): string {
   const taskList = scenario.tasks.map((t) => `${t.id}: ${t.title} (${t.titleCN})`).join('\n');
-  return `You are role-playing as ${scenario.role} (${scenario.roleCN}) to help a Korean learner practice. Stay fully in character.
-Tasks the learner should accomplish (id: task):
+  return `You are role-playing ONLY as ${scenario.role} (${scenario.roleCN}) to help a Korean learner practice speaking. Stay fully in character as this single role for the whole conversation. The LEARNER plays the other side.
+
+Tasks the LEARNER (not you) must accomplish by speaking (id: task):
 ${taskList}
 
-Respond with a JSON object ONLY:
-{"reply": "<your in-character answer in Korean, 1-2 short simple sentences>", "done": ["<ids of ALL tasks the learner has completed so far>"]}
+CRITICAL — never do the learner's job for them:
+- You speak ONLY as ${scenario.role}. The task lines belong to the learner — never say, volunteer, or answer with the words that are the learner's task.
+- If some information is the learner's to provide, ASK for it; do not state it yourself. Never put words in the learner's mouth or answer on their behalf.
+- Move the conversation forward by creating a natural opening — ask a question or set up the situation — so the LEARNER is prompted to produce the next uncompleted task themselves.
 
-Rules:
-- "reply" must be ONLY Korean (Hangul), natural and beginner-friendly. Gently guide the learner toward the next uncompleted task.
-- If the learner writes Chinese/English, put the Korean they should say in "reply", then continue in character.
-- "done" is cumulative based on the WHOLE conversation — include every task id already accomplished.
-- When all tasks are done, congratulate them in "reply".
-- Output JSON only — no markdown, no extra text.`;
+Guiding:
+- After each learner turn, gently steer toward the next UNCOMPLETED task, in character.
+- If the learner is stuck/silent or writes Chinese/English, give a short in-character nudge about WHAT topic to try next — but NEVER say the full Korean sentence they should say (a separate hint feature does that on demand).
+
+Deciding "done":
+- Include a task id ONLY when the LEARNER'S OWN messages have actually accomplished it in this conversation.
+- NEVER mark a task done from your own messages, or just because the topic was mentioned. Be conservative: if unsure the learner truly did it, leave it out.
+- "done" is the cumulative list of every task the learner has accomplished so far across the whole conversation.
+- Only when ALL tasks are truly done, warmly congratulate the learner in "reply".
+
+Respond with a JSON object ONLY — no markdown, no extra text:
+{"reply": "<your in-character reply, ONLY Korean (Hangul), 1-2 short beginner-friendly sentences>", "done": ["<ids the LEARNER has accomplished so far>"]}`;
 }
 
 /** One scenario turn: returns the Korean reply + cumulative completed task ids. */

@@ -66,6 +66,9 @@ export interface AudioFile {
   // this path directly — no Qiniu download needed at play time.
   localAudioUri?: string;
   transcodeId?: string;
+  // 上传到七牛的原始视频 key（lisa/{userId}/video_*.mp4）。转码出 WAV 后即可删除以省存储；
+  // 删除后清空。仅在「已上传视频、尚未删源视频」的窗口内有值。
+  videoKey?: string;
 }
 
 export interface TranscriptItem {
@@ -152,7 +155,12 @@ export interface GrammarSense {
 export interface GrammarTable {
   title?: string;             // 表标题，如 "TOPIK I 必考连接词尾"
   headers?: string[];         // 表头，如 ["关系", "连接词尾"]
-  rows: string[][];           // 每行的单元格
+  rows?: string[][];          // 每行的单元格；纯例句分组（只有 title + examples）时可省略
+  merges?: { col: number; row: number; span: number }[]; // 纵向合并：col 列从 row 行起合并 span 行（首行取值，被合并行的该格留空）
+  note?: string;              // 表格下方的注意说明，如 "汉字序数词与单位依存名词连用时常省略제"
+  examples?: GrammarExample[]; // 表格下方的例句（从表内 "例词" 列抽出来单独展示）；无 rows 时可当作纯例句分组
+  level?: 'section' | 'item'; // 标题层级：section = 大节标题（如"说明1 …"），item = 小项标题（如"① 数数"，更小）；默认普通表标题
+  text?: string;              // 标题下方的普通说明段落（区别于橙色"注意"框）
 }
 
 export interface GrammarEntry {

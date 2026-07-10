@@ -7,6 +7,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { unlink } from '@dr.pogodin/react-native-fs';
 import { useState } from 'react';
 import { useListenStore } from '../../stores/useListenStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { CheckCircle2 } from 'lucide-react-native';
 import { AudioFile } from '../../types';
 import { C, S } from '../../utils/theme';
@@ -38,10 +39,11 @@ export default function ListenScreen() {
       setUploadMsg('正在上传视频至云端...');
       console.log('[Upload] Starting upload, uri prefix:', uri.substring(0, 60));
       try {
-        const { transcodeId } = await uploadAndTriggerTranscode(uri);
+        const userId = useAuthStore.getState().userId || undefined;
+        const { transcodeId, videoKey } = await uploadAndTriggerTranscode(uri, userId);
         console.log('[Upload] Got transcodeId:', transcodeId);
         setUploadMsg('上传成功，已触发转码');
-        addFile({ ...base, transcodeId });
+        addFile({ ...base, transcodeId, videoKey });
       } catch (e: any) {
         Alert.alert('上传失败', e?.message || '请检查网络后重试');
       } finally {

@@ -114,6 +114,12 @@ function splitPattern(p: string): string[] {
     .filter(Boolean);
 }
 
+// 注意文本按 ①②③… 圆圈序号拆成多条；无序号则整段一条
+function noteItems(text: string): string[] {
+  const parts = text.split(/(?=[①②③④⑤⑥⑦⑧⑨⑩⑪⑫])/).map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts : [text];
+}
+
 const LEVEL_LABEL: Record<GrammarLevel, string> = { beginner: '初', intermediate: '中', advanced: '高' };
 const LEVEL_COLOR: Record<GrammarLevel, string> = { beginner: C.green, intermediate: C.orange, advanced: C.pink };
 const LEVEL_FULL: Record<GrammarLevel, string> = { beginner: '初级', intermediate: '中级', advanced: '高级' };
@@ -161,6 +167,8 @@ export default function LibraryScreen() {
 
   const renderEntryCard = (e: GrammarEntry) => {
     const saved = savedIds.has(e.id);
+    const exCount = e.examples.length + (e.tables?.reduce((n, t) => n + (t.examples?.length || 0), 0) || 0);
+    const desc = e.explanation || e.tables?.find(t => t.text)?.text || ''; // explanation 为空时用首个说明段落兜底
     return (
       <TouchableOpacity key={e.id} style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mb2]} onPress={() => setSelectedEntry(e)}>
         <View style={[S.spaceBetween, { alignItems: 'flex-start' }]}>
@@ -171,64 +179,130 @@ export default function LibraryScreen() {
             <Star size={18} color={saved ? C.accent : C.text3} fill={saved ? C.accent : 'transparent'} />
           </TouchableOpacity>
         </View>
-        <Text style={[S.textXs, S.text2, S.mt1, { lineHeight: 20 }]} numberOfLines={2}>{e.explanation}</Text>
+        <Text style={[S.textXs, S.text2, S.mt1, { lineHeight: 20 }]} numberOfLines={2}>{desc}</Text>
         <View style={[S.row, S.gap1, S.itemsCenter, S.mt2]}>
           <FileText size={12} color={C.text3} />
-          <Text style={[S.textXs, S.text3]}>{e.examples.length} 个例句</Text>
+          <Text style={[S.textXs, S.text3]}>{exCount} 个例句</Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   const renderTable = (t: GrammarTable, ti: number) => {
-    const cols = t.headers?.length || t.rows[0]?.length || 1;
+    const rows = t.rows || [];
+    const cols = t.headers?.length || rows[0]?.length || 1;
     // 固定列宽（标签列 60，其余 148）；若总宽能放进屏幕就弹性撑满，放不下才横向滚动
     const fits = 60 + (cols - 1) * 148 <= winW - 64;
     const cw = (ci: number): any => (fits ? { flex: ci === 0 ? 1 : 2 } : { width: ci === 0 ? 60 : 148 });
-    const inner = (
-      <View style={[S.border, S.roundedSM, { overflow: 'hidden' }, fits ? { width: '100%' } : null]}>
-        {t.headers ? (
-          <View style={[S.row, S.bgAccent15]}>
-            {t.headers.map((h, ci) => (
-              <View key={ci} style={[cw(ci), { padding: 8 }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: C.border }]}>
-                <Text style={[S.textXs, S.semibold, S.textAccent, S.textCenter]}>{h}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        {t.rows.map((row, ri) => (
-          <View key={ri} style={[S.row, S.borderBottom, ri % 2 === 1 && S.bgSurface2]}>
-            {row.map((cell, ci) => (
-              <View key={ci} style={[cw(ci), { padding: 8 }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: C.border }]}>
-                <Text style={[S.textXs, ci === 0 ? [S.text2, S.semibold] : S.text, { lineHeight: 20 }]}>{cell}</Text>
-              </View>
-            ))}
+    const leftB = { borderLeftWidth: 1, borderLeftColor: C.border };
+    const bottomB = { borderBottomWidth: 1, borderBottomColor: C.border };
+    // 纵向合并：有 merges 时按「列」渲染，合并格高度 = span×行高并垂直居中，跨行真正居中
+    const merges = t.merges || [];
+    const hasMerge = merges.length > 0;
+    const nRows = rows.length;
+    const ROW_H = 40; // 合并表固定行高，保证各列对齐
+    const isHidden = (ri: number, ci: number) => merges.some(m => m.col === ci && ri > m.row && ri < m.row + m.span);
+    const spanAt = (ri: number, ci: number) => merges.find(m => m.col === ci && m.row === ri)?.span || 1;
+
+    const header = t.headers ? (
+      <View style={[S.row, S.bgAccent15]}>
+        {t.headers.map((h, ci) => (
+          <View key={ci} style={[cw(ci), { padding: 8 }, ci > 0 && leftB]}>
+            <Text style={[S.textXs, S.semibold, S.textAccent, S.textCenter]}>{h}</Text>
           </View>
         ))}
+      </View>
+    ) : null;
+
+    const body = hasMerge ? (
+      <View style={S.row}>
+        {Array.from({ length: cols }, (_, ci) => (
+          <View key={ci} style={[cw(ci), ci > 0 && leftB]}>
+            {rows.map((row, ri) => {
+              if (isHidden(ri, ci)) return null; // 被上格合并，跳过
+              const span = spanAt(ri, ci);
+              const last = ri + span >= nRows; // 到底：由外框画底线
+              return (
+                <View key={ri} style={[{ height: ROW_H * span, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center' }, !last && bottomB]}>
+                  <Text style={[S.textXs, ci === 0 ? [S.text2, S.semibold] : S.text, S.textCenter, { lineHeight: 18 }]}>{row[ci]}</Text>
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    ) : (
+      rows.map((row, ri) => (
+        <View key={ri} style={[S.row, S.borderBottom, ri % 2 === 1 && S.bgSurface2]}>
+          {row.map((cell, ci) => (
+            <View key={ci} style={[cw(ci), { padding: 8 }, ci > 0 && leftB]}>
+              <Text style={[S.textXs, ci === 0 ? [S.text2, S.semibold] : S.text, S.textCenter, { lineHeight: 20 }]}>{cell}</Text>
+            </View>
+          ))}
+        </View>
+      ))
+    );
+
+    const hasGrid = (t.headers?.length || 0) > 0 || rows.length > 0; // 无网格时（只有标题+例句）当纯分组
+    const inner = (
+      <View style={[S.border, S.roundedSM, { overflow: 'hidden' }, fits ? { width: '100%' } : null]}>
+        {header}
+        {body}
       </View>
     );
     return (
       <View key={ti} style={S.mb3}>
-        {t.title ? <Text style={[S.textXs, S.semibold, S.text2, S.mb1, S.textCenter]}>{t.title}</Text> : null}
-        {fits ? inner : <ScrollView horizontal showsHorizontalScrollIndicator={false}>{inner}</ScrollView>}
+        {t.title ? (
+          <Text style={[t.level === 'section' ? S.textBase : t.level === 'item' ? S.textXs : S.textSm, S.bold, S.text, S.mb1, t.level === 'section' && S.mt2]}>{t.title}</Text>
+        ) : null}
+        {t.text ? <Text style={[S.textSm, S.text, S.mb2, { lineHeight: 22 }]}>{t.text}</Text> : null}
+        {hasGrid ? (fits ? inner : <ScrollView horizontal showsHorizontalScrollIndicator={false}>{inner}</ScrollView>) : null}
+        {t.note ? (
+          <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mt2]}>
+            <Text style={[S.textXs, S.semibold, S.textOrange, S.mb1]}>注意</Text>
+            {noteItems(t.note).map((it, i) => (
+              <Text key={i} style={[S.textSm, S.text, { lineHeight: 24 }, i > 0 && S.mt1]}>{it}</Text>
+            ))}
+          </View>
+        ) : null}
+        {t.examples?.length ? (
+          <View style={hasGrid || t.note ? S.mt2 : undefined}>
+            {t.examples.map((x, i) => renderExampleRow(x, i, '', true))}
+          </View>
+        ) : null}
       </View>
     );
   };
 
-  const renderExampleRow = (x: GrammarEntry['examples'][0], i: number, title = '') => (
-    <View key={i} style={[S.bgSurface, S.border, S.roundedSM, S.p3, S.mb2]}>
-      <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{title ? renderHlKo(x.ko, title) : x.ko}</Text>
-      <View style={[S.row, S.gap1, S.itemsCenter, S.mt1]}>
-        <Text style={[S.textXs, S.text2, { flex: 1 }]}>{x.zh}</Text>
-        {x.zhSrc === 'ai' && (
-          <View style={[S.bgAccent15, S.roundedFull, { paddingHorizontal: 6, paddingVertical: 1 }]}>
-            <Text style={[{ fontSize: 11 }, S.textAccent, S.semibold]}>AI译</Text>
-          </View>
-        )}
-        {x.exam && <Text style={[{ fontSize: 11 }, S.text3]}>{x.exam}</Text>}
+  const renderExampleRow = (x: GrammarEntry['examples'][0], i: number, title = '', plain = false) => {
+    const aiTag = x.zhSrc === 'ai' && (
+      <View style={[S.bgAccent15, S.roundedFull, { paddingHorizontal: 6, paddingVertical: 1 }]}>
+        <Text style={[{ fontSize: 11 }, S.textAccent, S.semibold]}>AI译</Text>
       </View>
-    </View>
-  );
+    );
+    const examTag = x.exam && <Text style={[{ fontSize: 11 }, S.text3]}>{x.exam}</Text>;
+    // 简洁内联：韩文 + 翻译同一行，行距紧凑（用于表格下方的例词）
+    if (plain) {
+      return (
+        <View key={i} style={[S.row, S.itemsCenter, S.gap2, { paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: C.border }]}>
+          <Text style={[S.textSm, S.text]}>{x.ko}</Text>
+          <Text style={[S.textXs, S.text2, { flex: 1 }]}>{x.zh}</Text>
+          {aiTag}
+          {examTag}
+        </View>
+      );
+    }
+    return (
+      <View key={i} style={[S.bgSurface, S.border, S.roundedSM, S.p3, S.mb2]}>
+        <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{title ? renderHlKo(x.ko, title) : x.ko}</Text>
+        <View style={[S.row, S.gap1, S.itemsCenter, S.mt1]}>
+          <Text style={[S.textXs, S.text2, { flex: 1 }]}>{x.zh}</Text>
+          {aiTag}
+          {examTag}
+        </View>
+      </View>
+    );
+  };
 
   const renderWordCard = (w: Word) => (
     <TouchableOpacity key={w.id} style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mb2]} onPress={() => setFlipped(f => ({ ...f, [w.id]: !f[w.id] }))}>
@@ -438,8 +512,11 @@ export default function LibraryScreen() {
       ) : currentTab === 'grammar' ? (
         <FlatList
           data={[
-            ...savedGrammarEntries.map(e => ({ kind: 'entry' as const, e })),
-            ...grammarPoints.filter(g => currentFilter === 'all' || g.level === currentFilter).map(g => ({ kind: 'point' as const, g })),
+            ...savedGrammarEntries.filter(matchEntry).map(e => ({ kind: 'entry' as const, e })),
+            ...grammarPoints
+              .filter(g => currentFilter === 'all' || g.level === currentFilter)
+              .filter(g => !q || g.ko.toLowerCase().includes(q) || g.zh.toLowerCase().includes(q))
+              .map(g => ({ kind: 'point' as const, g })),
           ]}
           keyExtractor={(it) => it.kind === 'entry' ? 'e_' + it.e.id : 'p_' + it.g.id}
           renderItem={({ item }) => item.kind === 'entry' ? renderEntryCard(item.e) : (
@@ -529,12 +606,12 @@ export default function LibraryScreen() {
             <View style={[S.row, S.gap2, S.itemsCenter, { flex: 1 }]}>
               <GraduationCap size={18} color={C.accent} />
               <Text style={[S.textSm, S.semibold, S.text]} numberOfLines={1}>{selectedEntry?.unit}</Text>
+              {selectedEntry && (
+                <TouchableOpacity onPress={() => toggleSaveGrammarEntry(selectedEntry)} hitSlop={8}>
+                  <Star size={18} color={savedIds.has(selectedEntry.id) ? C.accent : C.text3} fill={savedIds.has(selectedEntry.id) ? C.accent : 'transparent'} />
+                </TouchableOpacity>
+              )}
             </View>
-            {selectedEntry && (
-              <TouchableOpacity style={{ paddingHorizontal: 8 }} onPress={() => toggleSaveGrammarEntry(selectedEntry)} hitSlop={8}>
-                <Star size={20} color={savedIds.has(selectedEntry.id) ? C.accent : C.text3} fill={savedIds.has(selectedEntry.id) ? C.accent : 'transparent'} />
-              </TouchableOpacity>
-            )}
             <TouchableOpacity onPress={() => setSelectedEntry(null)}>
               <X size={22} color={C.text2} />
             </TouchableOpacity>
@@ -567,26 +644,34 @@ export default function LibraryScreen() {
                   );
                 })() : null}
                 {/* 说明 */}
-                <View style={[S.mb3]}>
-                  <Text style={[S.textXs, S.textAccent, S.semibold, S.mb1]}>说明</Text>
-                  <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{selectedEntry.explanation}</Text>
-                  {selectedEntry.senses?.map((s, i) => (
-                    <View key={i} style={S.mt2}>
-                      <Text style={[S.textXs, S.semibold, S.text2]}>{s.label}</Text>
-                      <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{s.text}</Text>
-                    </View>
-                  ))}
-                </View>
+                {(selectedEntry.explanation || selectedEntry.senses?.length) ? (
+                  <View style={[S.mb3]}>
+                    <Text style={[S.textXs, S.textAccent, S.semibold, S.mb1]}>说明</Text>
+                    {selectedEntry.explanation ? <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{selectedEntry.explanation}</Text> : null}
+                    {selectedEntry.senses?.map((s, i) => (
+                      <View key={i} style={S.mt2}>
+                        <Text style={[S.textXs, S.semibold, S.text2]}>{s.label}</Text>
+                        <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{s.text}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {/* 对照表 */}
                 {selectedEntry.tables?.map(renderTable)}
                 {/* 例文 */}
-                <Text style={[S.textXs, S.textAccent, S.semibold, S.mb2]}>例文</Text>
-                {selectedEntry.examples.map((x, i) => renderExampleRow(x, i, selectedEntry.title))}
+                {selectedEntry.examples.length ? (
+                  <>
+                    <Text style={[S.textXs, S.textAccent, S.semibold, S.mb2]}>例文</Text>
+                    {selectedEntry.examples.map((x, i) => renderExampleRow(x, i, selectedEntry.title))}
+                  </>
+                ) : null}
                 {/* 注意 */}
                 {selectedEntry.note ? (
                   <View style={[S.bgSurface2, S.roundedSM, S.p3, S.mt2]}>
                     <Text style={[S.textXs, S.semibold, S.textOrange, S.mb1]}>注意</Text>
-                    <Text style={[S.textSm, S.text, { lineHeight: 24 }]}>{selectedEntry.note.text}</Text>
+                    {noteItems(selectedEntry.note.text).map((it, i) => (
+                      <Text key={i} style={[S.textSm, S.text, { lineHeight: 24 }, i > 0 && S.mt1]}>{it}</Text>
+                    ))}
                     {selectedEntry.note.examples?.map((x, i) => (
                       <View key={i} style={S.mt2}>{renderExampleRow(x, i, selectedEntry.title)}</View>
                     ))}

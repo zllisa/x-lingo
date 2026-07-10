@@ -41,19 +41,25 @@ function getUploadToken(): string {
   return `${QINIU_ACCESS_KEY}:${sign}:${encodedPolicy}`;
 }
 
-function getManagementToken(method: string, path: string, bodyStr: string): string {
+// 七牛「管理凭证」。签名串含 Host，所以不同 API（api / rs）要传各自的 host。
+function getManagementToken(method: string, host: string, path: string, bodyStr: string): string {
   const lines = [
-    `${method} ${path}`, `Host: api.qiniu.com`,
+    `${method} ${path}`, `Host: ${host}`,
     `Content-Type: application/x-www-form-urlencoded`, ``, bodyStr,
   ];
   const sign = hmacSign(lines.join('\n'), QINIU_SECRET_KEY);
   return `Qiniu ${QINIU_ACCESS_KEY}:${sign}`;
 }
 
+// 用户目录前缀：登录后按 userId 隔离，未登录回落到 anon。
+function userPrefix(userId?: string): string {
+  return `lisa/${userId || 'anon'}`;
+}
+
 // ── upload ──
 
-export async function uploadToQiniu(fileUri: string): Promise<string> {
-  const key = `lisa/video_${Date.now()}.mp4`;
+export async function uploadToQiniu(fileUri: string, userId?: string): Promise<string> {
+  const key = `${userPrefix(userId)}/video_${Date.now()}.mp4`;
   const token = getUploadToken();
 
   const formData = new FormData();
@@ -88,9 +94,10 @@ export async function uploadToQiniu(fileUri: string): Promise<string> {
 // ── pfop ──
 
 async function triggerTranscode(key: string): Promise<string> {
-  // saveas: pin the transcode output to lisa/ with a deterministic key,
+  // saveas: pin the transcode output next to its source video (same user dir),
   // instead of letting Qiniu auto-generate one at the bucket root.
-  const outputKey = `lisa/audio_${Date.now()}.wav`;
+  const dir = key.includes('/') ? key.slice(0, key.lastIndexOf('/')) : 'lisa';
+  const outputKey = `${dir}/audio_${Date.now()}.wav`;
   const saveas = b64Encode(`${QINIU_BUCKET}:${outputKey}`);
   const body = new URLSearchParams({
     bucket: QINIU_BUCKET, key,
@@ -106,7 +113,7 @@ async function triggerTranscode(key: string): Promise<string> {
     const resp = await fetch('https://api.qiniu.com/pfop/', {
       method: 'POST',
       headers: {
-        Authorization: getManagementToken('POST', '/pfop/', body),
+        Authorization: getManagementToken('POST', 'api.qiniu.com', '/pfop/', body),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body,
@@ -133,7 +140,7 @@ async function waitForTranscode(persistentId: string): Promise<string> {
 
   for (let i = 0; i < 40; i++) {
     const resp = await fetch(`https://api.qiniu.com${path}`, {
-      headers: { Authorization: getManagementToken('GET', path, '') },
+      headers: { Authorization: getManagementToken('GET', 'api.qiniu.com', path, '') },
     });
     const data = await resp.json();
     console.log('[Qiniu] Prefop status', i, 'code:', data.code);
@@ -204,10 +211,33 @@ export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
  * without waiting for the transcode to finish. The caller should store the
  * returned transcodeId and later call resumeTranscodeAudio() to get the WAV.
  */
-export async function uploadAndTriggerTranscode(videoUri: string): Promise<{ transcodeId: string }> {
-  const key = await uploadToQiniu(videoUri);
+export async function uploadAndTriggerTranscode(videoUri: string, userId?: string): Promise<{ transcodeId: string; videoKey: string }> {
+  const key = await uploadToQiniu(videoUri, userId);
   const transcodeId = await triggerTranscode(key);
-  return { transcodeId };
+  // 返回 videoKey，转码完成后由调用方删除源视频以省存储。
+  return { transcodeId, videoKey: key };
+}
+
+// 批量删除七牛对象（best-effort，失败只记日志不抛）。用于转码完成后清理源视频。
+export async function deleteFromQiniu(keys: string[]): Promise<void> {
+  const list = keys.filter(Boolean);
+  if (!list.length || !qiniuEnabled()) return;
+  const host = 'rs.qiniu.com';
+  const path = '/batch';
+  const body = list.map((k) => `op=/delete/${b64Encode(`${QINIU_BUCKET}:${k}`)}`).join('&');
+  try {
+    const resp = await fetch(`https://${host}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: getManagementToken('POST', host, path, body),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+    console.log('[Qiniu] batch delete', resp.status, (await resp.text()).substring(0, 120));
+  } catch (e: any) {
+    console.warn('[Qiniu] delete failed:', e?.message);
+  }
 }
 
 /**
@@ -242,9 +272,9 @@ export async function resumeTranscodeUrl(transcodeId: string): Promise<string> {
  * Returns the local file:// URI plus the durable remote URL (so the caller
  * can persist it and re-download after the local cache is purged).
  */
-export async function qiniuExtractAudio(videoUri: string): Promise<{ uri: string; remoteUrl: string }> {
+export async function qiniuExtractAudio(videoUri: string, userId?: string): Promise<{ uri: string; remoteUrl: string }> {
   // 1. Upload
-  const key = await uploadToQiniu(videoUri);
+  const key = await uploadToQiniu(videoUri, userId);
 
   // 2. Transcode
   const pid = await triggerTranscode(key);
@@ -253,6 +283,9 @@ export async function qiniuExtractAudio(videoUri: string): Promise<{ uri: string
   // 3. Download via RNFS (native, no JS memory pressure)
   const remoteUrl = `${QINIU_DOMAIN}/${outputKey}`;
   const uri = await downloadQiniuAudio(remoteUrl);
+
+  // WAV 已产出，源视频不再需要 → 删除省存储（best-effort）。
+  deleteFromQiniu([key]);
 
   // Verify: read back first bytes to confirm the file is valid
   const { readFile } = require('@dr.pogodin/react-native-fs');

@@ -65,6 +65,46 @@ export async function loadSentencesFromCloud(userId: string): Promise<any[]> {
   return (data || []).map((r: any) => r.sentence_data);
 }
 
+// ─── Listen (精听) Sync ──────────────────────────────────────
+// 一个音频 = 一行；file_data 含 meta + transcript。按 (user_id,file_id) upsert，
+// 只推变化的那一个文件，不做全量删重插（避免每次改动重传整库）。
+export async function syncListenFileToCloud(userId: string, fileId: string, fileData: any) {
+  await supabase.from('listen_files').upsert(
+    { user_id: userId, file_id: fileId, file_data: fileData, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,file_id' },
+  );
+}
+
+export async function deleteListenFileFromCloud(userId: string, fileId: string) {
+  await supabase.from('listen_files').delete().eq('user_id', userId).eq('file_id', fileId);
+}
+
+export async function loadListenFilesFromCloud(userId: string): Promise<any[]> {
+  const { data } = await supabase
+    .from('listen_files').select('file_data').eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+  return (data || []).map((r: any) => r.file_data);
+}
+
+// ─── Conversations (口语) Sync ───────────────────────────────
+export async function syncConversationToCloud(userId: string, convId: string, convData: any) {
+  await supabase.from('conversations').upsert(
+    { user_id: userId, conv_id: convId, conv_data: convData, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,conv_id' },
+  );
+}
+
+export async function deleteConversationFromCloud(userId: string, convId: string) {
+  await supabase.from('conversations').delete().eq('user_id', userId).eq('conv_id', convId);
+}
+
+export async function loadConversationsFromCloud(userId: string): Promise<any[]> {
+  const { data } = await supabase
+    .from('conversations').select('conv_data').eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+  return (data || []).map((r: any) => r.conv_data);
+}
+
 // ─── Study Record Sync ───────────────────────────────────────
 export async function recordStudyToCloud(userId: string, rounds: number) {
   const today = new Date().toISOString().slice(0, 10);

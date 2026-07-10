@@ -56,6 +56,7 @@ export async function transcribeFile(
   onProgress?: (message: string) => void,
   transcodeId?: string,
   existingRemoteAudioUrl?: string,
+  userId?: string,
 ): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string; localAudioUri?: string }> {
   let audioUri = fileUri;
   let remoteAudioUrl: string | undefined = existingRemoteAudioUrl;
@@ -98,7 +99,7 @@ export async function transcribeFile(
       console.log('[Transcription] Sending video directly to Groq Whisper:', fileUri);
     } else if (qiniuEnabled()) {
       onProgress?.('正在上传至七牛云并提取音频...');
-      const q = await qiniuExtractAudio(fileUri);
+      const q = await qiniuExtractAudio(fileUri, userId);
       audioUri = q.uri;
       remoteAudioUrl = q.remoteUrl;
     } else {

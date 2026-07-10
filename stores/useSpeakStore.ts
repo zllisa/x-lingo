@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SpeakMode, ChatMessage, VoiceState, Conversation, TopicScenario } from '../types';
 import { MOCK_TOPICS } from '../constants/mockData';
+import { useAuthStore } from './useAuthStore';
+import { syncConversationToCloud, deleteConversationFromCloud, loadConversationsFromCloud } from '../lib/sync';
 
 // Patch the currently-active conversation with a partial update.
 function patchActiveConv(
@@ -52,11 +54,21 @@ interface SpeakStore {
   setVoiceSeconds: (n: number) => void;
   setVoiceDraftText: (t: string) => void;
   resetVoice: () => void;
+  loadFromCloud: () => Promise<void>;
 }
 
 export const useSpeakStore = create<SpeakStore>()(
   persist(
-    (set) => ({
+    (set, get) => {
+    // 把某段对话推送到云端；未登录跳过，失败静默。
+    const pushConv = (convId: string | null) => {
+      if (!convId) return;
+      const userId = useAuthStore.getState().userId;
+      if (!userId) return;
+      const conv = get().conversations.find((c) => c.id === convId);
+      if (conv) syncConversationToCloud(userId, convId, conv);
+    };
+    return {
       mode: 'topic',
       activeTopicId: null,
       chatHistory: [],
@@ -83,7 +95,7 @@ export const useSpeakStore = create<SpeakStore>()(
       startScenario: (scenario) =>
         set({ activeTopicId: 'scenario', activeScenario: scenario, activeConversationId: Date.now().toString(), chatHistory: [], completedTaskIds: [] }),
 
-      addMessage: (msg) =>
+      addMessage: (msg) => {
         set((s) => {
           const chatHistory = [...s.chatHistory, msg];
           // Upsert the active conversation so history is always current.
@@ -119,7 +131,9 @@ export const useSpeakStore = create<SpeakStore>()(
             }
           }
           return { chatHistory, conversations };
-        }),
+        });
+        pushConv(get().activeConversationId);
+      },
 
       openConversation: (id) =>
         set((s) => {
@@ -134,29 +148,52 @@ export const useSpeakStore = create<SpeakStore>()(
           };
         }),
 
-      deleteConversation: (id) =>
-        set((s) => ({ conversations: s.conversations.filter((c) => c.id !== id) })),
+      deleteConversation: (id) => {
+        const userId = useAuthStore.getState().userId;
+        if (userId) deleteConversationFromCloud(userId, id);
+        set((s) => ({ conversations: s.conversations.filter((c) => c.id !== id) }));
+      },
 
-      toggleTask: (taskId) =>
+      toggleTask: (taskId) => {
         set((s) => {
           const completedTaskIds = s.completedTaskIds.includes(taskId)
             ? s.completedTaskIds.filter((t) => t !== taskId)
             : [...s.completedTaskIds, taskId];
           return { completedTaskIds, conversations: patchActiveConv(s.conversations, s.activeConversationId, { completedTaskIds }) };
-        }),
+        });
+        pushConv(get().activeConversationId);
+      },
 
-      setCompletedTasks: (ids) =>
+      setCompletedTasks: (ids) => {
         set((s) => {
           // Union with existing so progress never regresses within a session.
           const completedTaskIds = Array.from(new Set([...s.completedTaskIds, ...ids]));
           return { completedTaskIds, conversations: patchActiveConv(s.conversations, s.activeConversationId, { completedTaskIds }) };
-        }),
+        });
+        pushConv(get().activeConversationId);
+      },
 
       setVoiceState: (voiceState) => set({ voiceState }),
       setVoiceSeconds: (voiceSeconds) => set({ voiceSeconds }),
       setVoiceDraftText: (voiceDraftText) => set({ voiceDraftText }),
       resetVoice: () => set({ voiceState: 'ready', voiceSeconds: 0, voiceDraftText: '' }),
-    }),
+      // 登录时拉取云端对话。云端有则合并（云为准 + 保留本地独有）；云端为空则把本地补传。
+      loadFromCloud: async () => {
+        const userId = useAuthStore.getState().userId;
+        if (!userId) return;
+        const rows = await loadConversationsFromCloud(userId);
+        const st = get();
+        const cloud: Conversation[] = rows.filter((c: any) => c?.id);
+        const cloudIds = new Set(cloud.map((c) => c.id));
+        for (const c of st.conversations) {
+          if (!cloudIds.has(c.id)) syncConversationToCloud(userId, c.id, c);
+        }
+        if (!cloud.length) return;
+        const localOnly = st.conversations.filter((c) => !cloudIds.has(c.id));
+        set({ conversations: [...localOnly, ...cloud].slice(0, 50) });
+      },
+    };
+    },
     {
       name: 'speak-store',
       storage: {
