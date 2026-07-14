@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { useUsageStore } from './useUsageStore';
 
 interface AuthStore {
   userId: string | null;
@@ -41,6 +42,7 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         await supabase.auth.signOut();
+        useUsageStore.getState().clear();
         set({ userId: null, email: null, isLoggedIn: false });
       },
 

@@ -8,6 +8,8 @@ import { useProfileStore } from '../../stores/useProfileStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useSpeakStore } from '../../stores/useSpeakStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useUsageStore } from '../../stores/useUsageStore';
+import { formatUsageMinutes } from '../../services/usage';
 import { useState } from 'react';
 import { GraduationCap, Pencil, FileText, Settings, Dices, UserPen, X, Crown, ArrowRight } from 'lucide-react-native';
 import { S, C } from '../../utils/theme';
@@ -46,6 +48,7 @@ export default function ProfileScreen() {
   const chatHistory = useSpeakStore(s => s.chatHistory);
   const words = useLibraryStore(s => s.words);
   const sentences = useLibraryStore(s => s.sentences);
+  const usage = useUsageStore(s => s.usage);
   const [editNickname, setEditNickname] = useState(false);
   const [nickInput, setNickInput] = useState('');
   const [showPicker, setShowPicker] = useState(false);
@@ -124,15 +127,19 @@ export default function ProfileScreen() {
             <Text style={[{ fontSize: 18 }, S.bold, S.textWhite]}>x-lingo Pro</Text>
           </View>
           <Text style={[{ fontSize: 13.5, lineHeight: 22, marginBottom: 14, color: 'rgba(255,255,255,0.92)' }]}>
-            无限 AI 对话 · 精听不限时长 · 全部场景与等级解锁
+            {usage?.isUnlimited
+              ? '管理员账号 · AI 精听不限时长'
+              : `AI 精听 · ${usage ? `剩余 ${formatUsageMinutes(usage.availableSeconds)}` : '15 分钟免费体验'}`}
           </Text>
           <View style={[S.spaceBetween]}>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>¥168/年 起 · 低至 0.46/天</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
+              {usage?.isUnlimited ? '服务端专属权限' : '¥68/月 · ¥698/年'}
+            </Text>
             <TouchableOpacity
               style={{ backgroundColor: '#fff', paddingHorizontal: 18, paddingVertical: 9, borderRadius: 9999 }}
               onPress={() => navigation.navigate('Membership')}
             >
-              <Text style={[{ fontSize: 14 }, S.bold, S.textAccent]}>立即升级</Text>
+              <Text style={[{ fontSize: 14 }, S.bold, S.textAccent]}>{usage?.isUnlimited ? '查看额度' : '立即升级'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -190,7 +197,15 @@ export default function ProfileScreen() {
           <Text style={[{ fontSize: 16 }, S.bold, S.text]}>系统设置</Text>
         </View>
         {[
-          { label: '会员管理', right: '未开通 ›', onPress: () => navigation.navigate('Membership') },
+          {
+            label: '会员管理',
+            right: usage?.isUnlimited
+              ? '管理员 · 不限时长 ›'
+              : usage?.subscriptionStatus === 'active'
+                ? 'VIP 已开通 ›'
+                : `${usage ? formatUsageMinutes(usage.availableSeconds) : '加载中'} ›`,
+            onPress: () => navigation.navigate('Membership'),
+          },
           { label: '罗马音默认显示', right: settings.romaVisible ? '开启' : '关闭', onPress: () => updateSettings({ romaVisible: !settings.romaVisible }) },
           { label: '音频播放语速', right: `${settings.playbackSpeed}×`, onPress: () => { const speeds = [0.5, 0.75, 0.85, 1, 1.5, 2]; const idx = speeds.indexOf(settings.playbackSpeed); updateSettings({ playbackSpeed: speeds[(idx + 1) % speeds.length] }); } },
           { label: '导出学习数据', right: '›', onPress: handleExport },

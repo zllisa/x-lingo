@@ -5,6 +5,7 @@ import { AudioFile, TranscriptItem } from '../types';
 import { transcribeFile } from '../services/transcription';
 import { useAuthStore } from './useAuthStore';
 import { syncListenFileToCloud, deleteListenFileFromCloud, loadListenFilesFromCloud } from '../lib/sync';
+import { useUsageStore } from './useUsageStore';
 
 // 后台转写任务状态。转写在 store 里跑，不绑定任何组件——用户可以离开精听页去
 // 别的模块，任务不中断，回来仍能看到进度 / 结果。任务本身不持久化（partialize
@@ -126,6 +127,7 @@ export const useListenStore = create<ListenStore>()(
               transcodeId,
               existingRemoteAudioUrl,
               userId,
+              fileId,
             );
             get().setTranscript(fileId, result.items);
             if (result.remoteAudioUrl) get().setRemoteAudioUrl(fileId, result.remoteAudioUrl);
@@ -139,9 +141,11 @@ export const useListenStore = create<ListenStore>()(
               pushFile(fileId);
             }
             patch({ status: 'done', message: `识别完成 · ${result.items.length} 句`, resultCount: result.items.length });
+            useUsageStore.getState().refresh();
           } catch (e: any) {
             console.error('[Transcribe] job failed:', e?.message, e);
             patch({ status: 'error', message: '识别失败', error: e?.message || '请检查网络后重试' });
+            useUsageStore.getState().refresh();
           }
         })();
       },

@@ -28,6 +28,8 @@ import {
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useListenStore, type TranscribeJob } from '../../stores/useListenStore';
 import { useProfileStore } from '../../stores/useProfileStore';
+import { useUsageStore } from '../../stores/useUsageStore';
+import { formatUsageMinutes } from '../../services/usage';
 import { romanize, romanizeWords } from '../../utils/romanize';
 import { useWordLookup } from '../../hooks/useWordLookup';
 import { C, S } from '../../utils/theme';
@@ -235,6 +237,14 @@ export default function PlayerScreen() {
   // 页去别的模块，任务不中断；回来后从 store 读取进度 / 结果。
   const startTranscription = () => {
     if (!file?.uri || !activeFileId) return;
+    const usage = useUsageStore.getState().usage;
+    if (usage && !usage.isUnlimited && (usage.availableSeconds || 0) <= 0) {
+      Alert.alert('语音额度已用完', '开通 VIP 或购买时长后可以继续识别。', [
+        { text: '取消', style: 'cancel' },
+        { text: '查看 VIP', onPress: () => navigation.navigate('Membership') },
+      ]);
+      return;
+    }
     const fileUri = file.uri;
     const fileId = activeFileId;
     const transcodeId = file.transcodeId;
@@ -245,7 +255,11 @@ export default function PlayerScreen() {
       hasSubs ? '重新识别' : '开始识别',
       hasSubs
         ? '将在后台重新识别，并覆盖当前字幕。\n\n注意：断句由 AI 完成，重跑的句数 / 切分可能与上次略有不同。'
-        : '将在后台识别字幕，可能需要 1~2 分钟。期间可以返回去做别的，完成后回来查看。',
+        : `将在后台识别字幕，可能需要 1~2 分钟。期间可以返回去做别的，完成后回来查看。${
+          usage
+            ? `\n\n当前额度：${usage.isUnlimited ? '不限时长' : formatUsageMinutes(usage.availableSeconds)}`
+            : ''
+        }`,
       [
         { text: '取消', style: 'cancel' },
         {

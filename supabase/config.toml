@@ -1,0 +1,4 @@
+project_id = "x-lingo"
+
+[functions.stt-batch]
+verify_jwt = true

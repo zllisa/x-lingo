@@ -59,13 +59,20 @@ function userPrefix(userId?: string): string {
 // ── upload ──
 
 export async function uploadToQiniu(fileUri: string, userId?: string): Promise<string> {
-  const key = `${userPrefix(userId)}/video_${Date.now()}.mp4`;
+  const rawExt = (fileUri.split('?')[0].split('.').pop() || 'bin').toLowerCase();
+  const ext = /^[a-z0-9]{2,5}$/.test(rawExt) ? rawExt : 'bin';
+  const mimeByExt: Record<string, string> = {
+    mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v',
+    mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac',
+    wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', webm: 'audio/webm',
+  };
+  const key = `${userPrefix(userId)}/source_${Date.now()}.${ext}`;
   const token = getUploadToken();
 
   const formData = new FormData();
   formData.append('token', token);
   formData.append('key', key);
-  formData.append('file', { uri: fileUri, type: 'video/mp4', name: 'upload.mp4' } as any);
+  formData.append('file', { uri: fileUri, type: mimeByExt[ext] || 'application/octet-stream', name: `upload.${ext}` } as any);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min

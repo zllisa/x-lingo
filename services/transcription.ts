@@ -57,6 +57,7 @@ export async function transcribeFile(
   transcodeId?: string,
   existingRemoteAudioUrl?: string,
   userId?: string,
+  fileId?: string,
 ): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string; localAudioUri?: string }> {
   let audioUri = fileUri;
   let remoteAudioUrl: string | undefined = existingRemoteAudioUrl;
@@ -91,10 +92,20 @@ export async function transcribeFile(
       audioUri = q.uri;
       remoteAudioUrl = q.remoteUrl;
     }
+  } else if (useAzure) {
+    // All metered listening transcription must use the same secure Azure Batch
+    // path. Convert both audio and video to our known PCM WAV format first so
+    // the backend can derive authoritative duration from Content-Length.
+    if (!qiniuEnabled()) {
+      throw new Error('Azure Batch 计费模式需要先配置七牛云转码服务');
+    }
+    onProgress?.('正在上传至七牛云并准备音频...');
+    const q = await qiniuExtractAudio(fileUri, userId);
+    audioUri = q.uri;
+    remoteAudioUrl = q.remoteUrl;
   } else if (isVideo(fileUri)) {
-    // Groq can demux small video containers directly; Azure cannot, so under
-    // Azure we always route video through Qiniu to obtain a WAV URL.
-    if (!useAzure && await canSendVideoDirect(fileUri)) {
+    // Groq can demux small video containers directly when explicitly selected.
+    if (await canSendVideoDirect(fileUri)) {
       onProgress?.('正在识别语音 (Groq Whisper 直接处理视频)...');
       console.log('[Transcription] Sending video directly to Groq Whisper:', fileUri);
     } else if (qiniuEnabled()) {
@@ -109,18 +120,20 @@ export async function transcribeFile(
   }
 
   // ── STT ── 只取「文字 + 逐词时间戳」，扔掉 ASR 自带的分句（Miraa 路线）。
-  // Azure Batch when we have a remote URL; otherwise Groq Whisper.
+  // Azure mode always reaches this point with a server-verifiable Qiniu WAV.
   let words: Word[];
   if (useAzure && remoteAudioUrl) {
     onProgress?.('正在识别语音 (Azure 云端识别)...');
     console.log('[Transcription] Azure Batch STT from', remoteAudioUrl);
-    words = await azureBatchWords(remoteAudioUrl, onProgress);
-  } else {
+    words = await azureBatchWords(remoteAudioUrl, onProgress, fileId || 'listen-file');
+  } else if (!useAzure) {
     if (!(audioUri === fileUri && isVideo(fileUri))) {
       onProgress?.('正在识别语音 (Groq Whisper)...');
     }
     console.log('[Transcription] Groq STT audioUri:', audioUri);
     words = await whisperWords(audioUri);
+  } else {
+    throw new Error('Azure Batch 缺少可识别的远端音频');
   }
 
   if (!words.length) {

@@ -45,3 +45,4 @@ android/build/
 *.hmap
 
 .env
+supabase/functions/.env

@@ -3,24 +3,27 @@ import { Crown, X, Check, Minus } from 'lucide-react-native';
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, S } from '../utils/theme';
+import { useUsageStore } from '../stores/useUsageStore';
+import { formatUsageMinutes } from '../services/usage';
 
 const BENEFITS = [
-  { label: '每日 AI 口语对话', free: '5 条',  pro: '无限' },
-  { label: '单段精听时长',     free: '3 分钟', pro: '不限' },
+  { label: 'AI 精听额度',       free: '体验 15 分钟', pro: '60 分钟/月' },
+  { label: '单段精听时长',     free: '5 分钟', pro: '60 分钟' },
   { label: '情景 & 等级全解锁', free: '基础',  pro: null  }, // null → check icon
   { label: '收藏 & 导出',      free: '50',     pro: '无限' },
   { label: '母语级 TTS · 多语速', free: null,  pro: null  }, // null → check/minus
 ] as const;
 
 const PLANS = [
-  { key: 'month',    label: '月度',  price: '¥28 / 月',             sub: '',                 recommended: false },
-  { key: 'year',     label: '年度',  price: '¥168 / 年',            sub: '约 ¥14 / 月',      recommended: true  },
-  { key: 'lifetime', label: '终身',  price: '¥388',                 sub: '一次买断',          recommended: false },
+  { key: 'month', label: '月度', price: '¥68 / 月', sub: '每月 60 分钟', recommended: false },
+  { key: 'year', label: '年度', price: '¥698 / 年', sub: '约 ¥58 / 月', recommended: true },
 ] as const;
 
 export default function MembershipScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const usage = useUsageStore(s => s.usage);
+  const refreshUsage = useUsageStore(s => s.refresh);
 
   return (
     <View style={[S.flex1, { backgroundColor: '#7c5cfc' }]}>
@@ -40,7 +43,7 @@ export default function MembershipScreen() {
             <Crown size={36} color="#ffd86b" style={{ marginBottom: 10 }} />
             <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff', letterSpacing: -0.5 }}>x-lingo Pro</Text>
             <Text style={{ fontSize: 14.5, color: 'rgba(255,255,255,0.92)', marginTop: 8, lineHeight: 22 }}>
-              解锁全部场景、无限陪练与精听，{'\n'}把韩语真正练到能用。
+              每月 60 分钟 AI 精听识别，{'\n'}把韩语真正练到能用。
             </Text>
           </View>
         </View>
@@ -49,6 +52,27 @@ export default function MembershipScreen() {
       {/* ── White content area ── */}
       <View style={[S.flex1, S.bg, { borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -4 }]}>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}>
+
+          {usage && (
+            <View style={[S.bgSurface, S.border, { borderRadius: 16, padding: 15, marginBottom: 18 }]}>
+              <View style={S.spaceBetween}>
+                <Text style={[{ fontSize: 14, fontWeight: '700' }, S.text]}>当前精听额度</Text>
+                <TouchableOpacity onPress={refreshUsage}>
+                  <Text style={[{ fontSize: 13 }, S.textAccent]}>刷新</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[{ fontSize: 23, fontWeight: '700', marginTop: 8 }, S.textAccent]}>
+                {usage.isUnlimited ? '不限时长' : formatUsageMinutes(usage.availableSeconds)}
+              </Text>
+              <Text style={[{ fontSize: 12.5, marginTop: 4 }, S.text3]}>
+                {usage.isUnlimited
+                  ? '管理员账号 · 服务端无限模式'
+                  : usage.subscriptionStatus === 'active'
+                    ? 'VIP 周期额度，用完后可购买加油包'
+                    : '一次性 15 分钟体验额度，用完后需开通 VIP'}
+              </Text>
+            </View>
+          )}
 
           {/* Benefits table */}
           <View style={[S.bgSurface, S.border, { borderRadius: 16, overflow: 'hidden', marginBottom: 18 }]}>
@@ -92,11 +116,11 @@ export default function MembershipScreen() {
                     : { borderColor: C.border, backgroundColor: C.surface },
                 ]}
                 activeOpacity={0.7}
-                onPress={() => Alert.alert('x-lingo Pro', '内购功能即将上线，敬请期待！')}
+                onPress={() => Alert.alert('x-lingo VIP', '套餐已就绪。连接 App Store Connect 与 RevenueCat 后即可购买。')}
               >
                 {plan.recommended && (
                   <View style={{ position: 'absolute', top: -9, left: 16, backgroundColor: C.accent, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 9999 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>推荐 · 省 50%</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>推荐 · 省约 14%</Text>
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
@@ -118,13 +142,13 @@ export default function MembershipScreen() {
           {/* CTA */}
           <TouchableOpacity
             style={[S.bgAccent, S.roundedFull, { height: 56, alignItems: 'center', justifyContent: 'center', shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 }]}
-            onPress={() => Alert.alert('x-lingo Pro', '内购功能即将上线，敬请期待！')}
+            onPress={() => Alert.alert('x-lingo VIP', '套餐已就绪。连接 App Store Connect 与 RevenueCat 后即可购买。')}
             activeOpacity={0.85}
           >
-            <Text style={[{ fontSize: 17, fontWeight: '700' }, S.textWhite]}>立即开通 · ¥168/年</Text>
+            <Text style={[{ fontSize: 17, fontWeight: '700' }, S.textWhite]}>立即开通 · ¥698/年</Text>
           </TouchableOpacity>
           <Text style={[{ fontSize: 12, textAlign: 'center', marginTop: 10 }, S.text3]}>
-            订阅自动续费，可随时取消 · 7 天无理由退款
+            订阅自动续费，可随时取消 · 购买与退款以 App Store 规则为准
           </Text>
         </ScrollView>
       </View>

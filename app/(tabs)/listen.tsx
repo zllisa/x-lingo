@@ -8,6 +8,7 @@ import { unlink } from '@dr.pogodin/react-native-fs';
 import { useState } from 'react';
 import { useListenStore } from '../../stores/useListenStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useUsageStore } from '../../stores/useUsageStore';
 import { CheckCircle2 } from 'lucide-react-native';
 import { AudioFile } from '../../types';
 import { C, S } from '../../utils/theme';
@@ -28,6 +29,14 @@ export default function ListenScreen() {
   const [uploadMsg, setUploadMsg] = useState('');
 
   const addVideoFile = async (name: string, uri: string) => {
+    const usage = useUsageStore.getState().usage;
+    if (usage && !usage.isUnlimited && (usage.availableSeconds || 0) <= 0) {
+      Alert.alert('精听额度已用完', '开通 VIP 或购买时长后可以继续上传并识别。', [
+        { text: '取消', style: 'cancel' },
+        { text: '查看 VIP', onPress: () => navigation.navigate('Membership') },
+      ]);
+      return;
+    }
     const id = Date.now().toString();
     const base: AudioFile = {
       id, name, icon: '🎬', duration: '--:--',

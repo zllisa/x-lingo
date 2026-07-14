@@ -10,6 +10,7 @@ import { useProfileStore } from '../stores/useProfileStore';
 import { useLibraryStore } from '../stores/useLibraryStore';
 import { useListenStore } from '../stores/useListenStore';
 import { useSpeakStore } from '../stores/useSpeakStore';
+import { useUsageStore } from '../stores/useUsageStore';
 import { S } from '../utils/theme';
 import TabLayout from './(tabs)/_layout';
 import ChatScreen from './speak/chat';
@@ -54,6 +55,7 @@ export default function App() {
       useLibraryStore.getState().loadSentencesFromCloud();
       useListenStore.getState().loadFromCloud();
       useSpeakStore.getState().loadFromCloud();
+      useUsageStore.getState().initialize();
     }
   }, [isLoggedIn]);
 
