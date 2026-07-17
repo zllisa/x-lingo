@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSpeakStore } from '../../stores/useSpeakStore';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -18,6 +19,7 @@ function formatDate(ts: number): string {
 export default function ConversationsScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { pagePadding } = useResponsiveLayout();
   const conversations = useSpeakStore((s) => s.conversations);
   const openConversation = useSpeakStore((s) => s.openConversation);
   const deleteConversation = useSpeakStore((s) => s.deleteConversation);
@@ -33,7 +35,7 @@ export default function ConversationsScreen() {
 
   return (
     <View style={[S.flex1, S.bg]}>
-      <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8 }, S.px4, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
+      <View style={[centeredContent(), { paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: pagePadding }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[S.flexRow, S.itemsCenter]}>
           <ChevronLeft size={18} color={C.accent} /><Text style={[S.textSm, S.textAccent, S.semibold]}>返回</Text>
         </TouchableOpacity>
@@ -43,7 +45,7 @@ export default function ConversationsScreen() {
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={[centeredContent(), { padding: pagePadding }]}
         ListEmptyComponent={
           <View style={[S.center, { paddingVertical: 80 }]}>
             <MessageSquare size={40} color={C.text3} />

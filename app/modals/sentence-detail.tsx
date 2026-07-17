@@ -9,11 +9,13 @@ import { azureTTS } from '../../services/azureTTS';
 import { SavedSentence } from '../../types';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 type SentenceDetailRoute = RouteProp<RootStackParamList, 'SentenceDetail'>;
 
 export default function SentenceDetailModal() {
   const navigation = useNavigation();
+  const { sheetWidth } = useResponsiveLayout();
   const route = useRoute<SentenceDetailRoute>();
   const text = route.params?.text ?? '';
   const source = route.params?.source ?? '';
@@ -80,7 +82,7 @@ export default function SentenceDetailModal() {
   return (
     <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => navigation.goBack()}>
       {/* Absorb taps on the card itself so only backdrop taps dismiss the sheet */}
-      <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
+      <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { width: sheetWidth, alignSelf: 'center', borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
 
         <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb1]}>

@@ -46,3 +46,4 @@ android/build/
 
 .env
 supabase/functions/.env
+supabase/.temp/

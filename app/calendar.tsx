@@ -5,9 +5,11 @@ import { useState, useMemo } from 'react';
 import { Calendar, ClipboardList, Flame } from 'lucide-react-native';
 import { useProfileStore } from '../stores/useProfileStore';
 import { S, C } from '../utils/theme';
+import { centeredContent, useResponsiveLayout } from '../utils/responsive';
 
 export default function CalendarScreen() {
   const navigation = useNavigation();
+  const { pagePadding } = useResponsiveLayout();
   const checkinDates = useProfileStore(s => s.checkinDates);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -47,7 +49,7 @@ export default function CalendarScreen() {
 
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
-      <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, S.px4, S.py3, S.borderBottom]}>
+      <View style={[centeredContent(760), S.flexRow, S.spaceBetween, S.itemsCenter, { paddingHorizontal: pagePadding }, S.py3, S.borderBottom]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={[S.textSm, S.textAccent, S.semibold]}>← 返回</Text>
         </TouchableOpacity>
@@ -57,7 +59,7 @@ export default function CalendarScreen() {
         </View>
         <View style={{ width: 40 }} />
       </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView contentContainerStyle={[centeredContent(760), { paddingBottom: 32 }]}>
         <View style={[S.bgSurface, S.border, S.roundedCard, S.p4, S.mx4, S.mt4]}>
           <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, S.mb3]}>
             <TouchableOpacity onPress={prevMonth}><Text style={[S.textLg, S.text]}>{'‹'}</Text></TouchableOpacity>

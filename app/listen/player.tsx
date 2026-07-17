@@ -1,17 +1,18 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  BookOpen, CheckCircle2, ChevronLeft, Copy,
-  Lightbulb, MessageCircle,
-  Mic,
-  Pause, Play, Puzzle, Repeat, Scissors,
-  SkipBack, SkipForward, Star, Type, Volume2, X,
+  AudioLines, BookOpen, CheckCircle2, ChevronLeft, Lightbulb,
+  MessageCircle, Mic, MoreHorizontal, Pause, Play, Puzzle, Repeat, Scissors, SkipBack,
+  SkipForward, Sparkles, Star, Type, Volume2, X,
 } from 'lucide-react-native';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, AppState, FlatList, Modal, ScrollView, Text,
-  TouchableOpacity, View,
+  ActionSheetIOS, ActivityIndicator, Alert, AppState, FlatList, Modal, PermissionsAndroid,
+  Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import { DocumentDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
+import Share from 'react-native-share';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   addPlaybackListener,
@@ -20,21 +21,21 @@ import {
   pause,
   play,
   seek,
-  setLooping,
   setRate,
   unload,
   type PlaybackEvent,
 } from '../../services/VariAudioPlayer';
-import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useListenStore, type TranscribeJob } from '../../stores/useListenStore';
+import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useUsageStore } from '../../stores/useUsageStore';
 import { formatUsageMinutes } from '../../services/usage';
-import { romanize, romanizeWords } from '../../utils/romanize';
-import { useWordLookup } from '../../hooks/useWordLookup';
+import { romanizeWords } from '../../utils/romanize';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
 import type { TranscriptItem } from '../../types';
+import AIExplainSheet from '../components/AIExplainSheet';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -55,15 +56,18 @@ const formatMs = (ms: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-const MAIN_ID = 'main';
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
 
-// 临时的 bundle 版本标记，显示在头部，用于确认手机加载的是最新 JS（排查
-// 「改了代码但行为没变」＝旧 bundle 的问题）。确认后可删。
-const BUILD_TAG = 'v6';
+const MAIN_ID = 'main';
 
 export default function PlayerScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { isTablet, height, sheetWidth } = useResponsiveLayout();
   const {
     audioFiles, activeFileId, transcripts, showTranslation, toggleTranslation,
     playerSpeed, setSpeed, isPlaying, setPlaying, progress, setProgress,
@@ -96,13 +100,23 @@ export default function PlayerScreen() {
   // Resolved playable file:// uri for the current file (may be a re-download
   // from Qiniu if the local cache was purged). Reset when the file changes.
   const playableUriRef = useRef<string | null>(null);
+  const loadingMainRef = useRef<Promise<void> | null>(null);
 
   const [showRomaja, setShowRomaja] = useState(true);
   const [durationMs, setDurationMs] = useState(0);
   const [currentMs, setCurrentMs] = useState(0);
-  const [loopMode, setLoopMode] = useState(false);
+  const seekingRef = useRef(false);
   const loopRef = useRef(false);
   const rateRef = useRef(1);
+  const [speedSheetVisible, setSpeedSheetVisible] = useState(false);
+  const [repeatSheetVisible, setRepeatSheetVisible] = useState(false);
+  const [repeatTimes, setRepeatTimes] = useState(1);
+  const [repeatRound, setRepeatRound] = useState(1);
+  const repeatTimesRef = useRef(1);
+  const repeatRoundRef = useRef(1);
+  const repeatSentenceIdxRef = useRef(0);
+  const repeatTransitionRef = useRef(false);
+  const repeatCycleTokenRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptListRef = useRef<FlatList<any>>(null);
   // 当前正在读到的词（句内 token 下标），用于卡拉OK式词级高亮
@@ -112,7 +126,32 @@ export default function PlayerScreen() {
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrolledIdxRef = useRef(-1);
   const transcriptIdxRef = useRef(0);
+  const [restoreSubtitleIdx, setRestoreSubtitleIdx] = useState<number | null>(null);
   useEffect(() => { transcriptIdxRef.current = transcriptIdx; }, [transcriptIdx]);
+  useEffect(() => {
+    const state = useListenStore.getState();
+    const saved = state.lastStudy;
+    if (saved?.fileId === activeFileId && state.progress > 0 && saved.transcriptIdx > 0) {
+      setRestoreSubtitleIdx(saved.transcriptIdx);
+    }
+  }, [activeFileId]);
+  useEffect(() => {
+    if (restoreSubtitleIdx === null || restoreSubtitleIdx <= 0 || !items.length) return;
+    const index = Math.min(restoreSubtitleIdx, items.length - 1);
+    const timer = setTimeout(() => {
+      lastScrolledIdxRef.current = index;
+      try {
+        transcriptListRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 });
+      } catch {}
+    }, 120);
+    const clearTimer = setTimeout(() => {
+      setRestoreSubtitleIdx(current => current === restoreSubtitleIdx ? null : current);
+    }, 900);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(clearTimer);
+    };
+  }, [restoreSubtitleIdx, items.length]);
   // ── 重新识别完成落地：暂停播放，回到第一句 ──
   // 新断句和旧断句的句子边界对不上，与其把高亮硬续在中途，不如干脆停下来从头
   // 开始。只在任务 running → done 的瞬间触发（而不是监听字幕数组变化），这样
@@ -140,27 +179,43 @@ export default function PlayerScreen() {
   // 稳定的行点击回调（通过 ref 拿到最新的 seekToTranscriptIdx），这样 renderItem
   // 的依赖里 onPress 恒定，配合 React.memo 让非当前句的行不重渲。
   const seekRef = useRef<(i: number) => void>(() => {});
-  const onRowPress = useCallback((i: number) => { seekRef.current(i); }, []);
+  const onRowPress = useCallback((i: number) => {
+    if (resumeTimerRef.current) {
+      clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    userScrollRef.current = false;
+    lastScrolledIdxRef.current = i;
+    seekRef.current(i);
+  }, []);
 
   // Echo
   const [echoVisible, setEchoVisible] = useState(false);
   const [echoIdx, setEchoIdx] = useState(0);
   const [echoPlaying, setEchoPlaying] = useState(false);
-  const [echoCopied, setEchoCopied] = useState(false);
+  const [echoRunning, setEchoRunning] = useState(false);
+  const [echoPhase, setEchoPhase] = useState<'ready' | 'listening' | 'recall' | 'recording' | 'reviewing'>('ready');
+  const [echoPhaseProgress, setEchoPhaseProgress] = useState(0);
+  const [echoPhaseRemaining, setEchoPhaseRemaining] = useState(0);
+  const echoPhaseProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const echoIdxRef = useRef(0);
-  const grammarPoints = useLibraryStore(s => s.grammarPoints);
-
-  // Word lookup — shown as a nested sheet INSIDE the echo modal so it doesn't
-  // dismiss the RN Modal (navigating to the WordDetail screen used to close it).
-  const libWords = useLibraryStore(s => s.words);
-  const addWord = useLibraryStore(s => s.addWord);
-  const [echoWord, setEchoWord] = useState<string | null>(null);
-  const echoWordLookup = useWordLookup(echoWord || '', !!echoWord);
-  const echoWordSaved = !!echoWord && libWords.some(w => w.ko === echoWord);
-
-  // Explain — persisted in store alongside transcript, survives app restart
-  const [showExplain, setShowExplain] = useState(false);
+  const echoRunTokenRef = useRef(0);
+  const echoRecordingRef = useRef(false);
+  const echoMicPrimedRef = useRef(false);
+  const echoReviewPlayerRef = useRef(new AudioRecorderPlayer());
+  const [explainVisible, setExplainVisible] = useState(false);
+  const [explainIdx, setExplainIdx] = useState(0);
+  const [explainIndices, setExplainIndices] = useState<number[]>([0]);
+  const [multiExplain, setMultiExplain] = useState<TranscriptItem['explain']>();
+  const explainFromEchoRef = useRef(false);
+  const pendingExplainIdxRef = useRef<number | null>(null);
   const [explaining, setExplaining] = useState(false);
+  const [selectedSubtitleIndices, setSelectedSubtitleIndices] = useState<number[]>([]);
+  const selectionMode = selectedSubtitleIndices.length > 0;
+  useEffect(() => setSelectedSubtitleIndices([]), [activeFileId]);
+  const grammarPoints = useLibraryStore(s => s.grammarPoints);
+  // 旧版内嵌讲解保留为不可见的兼容渲染分支；实际入口统一打开独立讲解弹层。
+  const showExplain = false;
 
   useFocusEffect(useCallback(() => {
     timerRef.current = setInterval(() => {
@@ -168,6 +223,9 @@ export default function PlayerScreen() {
     }, 60000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      repeatCycleTokenRef.current += 1;
+      repeatTransitionRef.current = false;
+      stopEchoRef.current();
       // Pause playback when leaving the screen
       pause(MAIN_ID).catch(() => {});
       setPlaying(false);
@@ -183,10 +241,55 @@ export default function PlayerScreen() {
       pollRef.current = setInterval(async () => {
         try {
           const s = await getStatus(MAIN_ID);
+          // 拖动期间以手指位置为准，避免播放器的高频进度回写与滑块争抢。
+          if (seekingRef.current) return;
           setCurrentMs(s.position);
           setDurationMs(s.duration);
           setProgress(s.duration > 0 ? (s.position / s.duration) * 100 : 0);
-          if (!s.isPlaying) setPlaying(false);
+          if (!s.isPlaying && !repeatTransitionRef.current) setPlaying(false);
+
+          // 有限次数的逐句复听：同一句播满 N 次后，明确跳到下一句并从 1/N
+          // 重新计数。用受控句子 ref，而不是当前位置推导，避免越过边界后把下一句
+          // 误认为本轮目标。
+          if (repeatTimesRef.current > 1 && items.length > 0 && !repeatTransitionRef.current) {
+            const repeatIdx = Math.min(repeatSentenceIdxRef.current, items.length - 1);
+            const repeatItem = items[repeatIdx];
+            const repeatEndMs = itemEndSec(repeatItem, items[repeatIdx + 1], s.duration / 1000) * 1000;
+            if (s.position >= repeatEndMs - 70) {
+              repeatTransitionRef.current = true;
+              const cycleToken = ++repeatCycleTokenRef.current;
+              await pause(MAIN_ID).catch(() => {});
+              // 每遍之间留出短暂回想/呼吸时间，避免机械地无缝连读。
+              await new Promise(resolve => setTimeout(resolve, 2300));
+              if (cycleToken !== repeatCycleTokenRef.current || repeatTimesRef.current <= 1) {
+                repeatTransitionRef.current = false;
+                return;
+              }
+              if (repeatRoundRef.current < repeatTimesRef.current) {
+                repeatRoundRef.current += 1;
+                setRepeatRound(repeatRoundRef.current);
+                await seek(MAIN_ID, itemStartSec(repeatItem) * 1000);
+                await play(MAIN_ID);
+                setPlaying(true);
+              } else if (repeatIdx < items.length - 1) {
+                const nextIdx = repeatIdx + 1;
+                repeatSentenceIdxRef.current = nextIdx;
+                repeatRoundRef.current = 1;
+                setRepeatRound(1);
+                setTranscriptIdx(nextIdx);
+                await seek(MAIN_ID, itemStartSec(items[nextIdx]) * 1000);
+                await play(MAIN_ID);
+                setPlaying(true);
+              } else {
+                await pause(MAIN_ID).catch(() => {});
+                setPlaying(false);
+                setRepeatRound(repeatTimesRef.current);
+              }
+              repeatTransitionRef.current = false;
+              return;
+            }
+          }
+
           if (items.length > 0) {
             const posSec = s.position / 1000;
             const idx = findTranscriptIndex(items, posSec);
@@ -210,7 +313,7 @@ export default function PlayerScreen() {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [isPlaying]);
+  }, [isPlaying, items]);
 
   // ── Native playback listener (handles finish events) ──
   useEffect(() => {
@@ -276,9 +379,28 @@ export default function PlayerScreen() {
 
   // ── Resolve a playable file:// uri, re-downloading from Qiniu if the local
   //    cache file has been purged by iOS. Caches the result for the session. ──
-  const loadMain = async () => {
+  const performLoadMain = async () => {
     if (!file?.uri) throw new Error('no file');
-    const doLoad = (uri: string) => load(MAIN_ID, uri, rateRef.current, loopRef.current);
+    const doLoad = async (uri: string) => {
+      await load(MAIN_ID, uri, rateRef.current, loopRef.current);
+      const resumeProgress = useListenStore.getState().progress;
+      const status = await getStatus(MAIN_ID);
+      setDurationMs(status.duration);
+      if (status.duration <= 0) return;
+      if (resumeProgress > 0 && resumeProgress < 100) {
+        const resumeMs = Math.min(status.duration - 1, status.duration * resumeProgress / 100);
+        await seek(MAIN_ID, resumeMs);
+        setCurrentMs(resumeMs);
+        if (items.length) {
+          const restoredIdx = findTranscriptIndex(items, resumeMs / 1000);
+          setTranscriptIdx(restoredIdx);
+          repeatSentenceIdxRef.current = restoredIdx;
+          setRestoreSubtitleIdx(restoredIdx);
+        }
+      } else {
+        setCurrentMs(0);
+      }
+    };
 
     if (playableUriRef.current) { await doLoad(playableUriRef.current); return; }
 
@@ -319,16 +441,41 @@ export default function PlayerScreen() {
       const local = await downloadQiniuAudio(file.remoteAudioUrl!);
       await doLoad(local);
       playableUriRef.current = local;
+      // 记住本次恢复出的本地缓存。下次进入播放器优先复用，不再重复下载。
+      if (activeFileId) useListenStore.getState().setLocalAudioUri(activeFileId, local);
     } finally {
       setRestoring(false);
     }
   };
+
+  const loadMain = async () => {
+    if (loadingMainRef.current) return loadingMainRef.current;
+    const pending = performLoadMain();
+    loadingMainRef.current = pending;
+    try {
+      await pending;
+    } finally {
+      if (loadingMainRef.current === pending) loadingMainRef.current = null;
+    }
+  };
+
+  // 页面打开时就加载时长，因此未播放也能拖动；如果来自“继续上次精听”，
+  // 同一次加载会把播放器和进度条一起恢复到保存位置。
+  useEffect(() => {
+    setDurationMs(0);
+    setCurrentMs(0);
+    loadMain().catch((error: any) => {
+      console.warn('[Player] preload failed:', error?.message || error);
+    });
+  }, [activeFileId]);
 
   // ── Main playback ──
   const togglePlayback = async () => {
     if (!file?.uri) return;
     try {
       if (isPlaying) {
+        repeatCycleTokenRef.current += 1;
+        repeatTransitionRef.current = false;
         await pause(MAIN_ID);
         setPlaying(false);
       } else {
@@ -350,21 +497,28 @@ export default function PlayerScreen() {
     } catch (e: any) { Alert.alert('播放失败', e?.message || '无法播放该文件'); }
   };
 
-  // 手动滚动：拖动时暂停自动跟随；停手后 3 秒无操作则滑回当前播放句。
+  // 手动滚动时暂时停止跟随；停手一小段时间后回到当前播放句并恢复居中跟随。
   const onUserScrollStart = () => {
     userScrollRef.current = true;
     if (resumeTimerRef.current) { clearTimeout(resumeTimerRef.current); resumeTimerRef.current = null; }
   };
   const scheduleAutoResume = () => {
-    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    if (resumeTimerRef.current) { clearTimeout(resumeTimerRef.current); resumeTimerRef.current = null; }
+    // 多选时用户需要停留在手动滚到的位置；不能沿用普通浏览时的 2.8 秒
+    // 自动归位，否则会在选择上下文的过程中被拉回当前播放句。
+    if (selectionMode) {
+      userScrollRef.current = true;
+      return;
+    }
     resumeTimerRef.current = setTimeout(() => {
+      resumeTimerRef.current = null;
       userScrollRef.current = false;
-      const idx = transcriptIdxRef.current;
-      lastScrolledIdxRef.current = idx;
+      const index = Math.min(Math.max(transcriptIdxRef.current, 0), Math.max(items.length - 1, 0));
+      lastScrolledIdxRef.current = index;
       try {
-        transcriptListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+        transcriptListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
       } catch {}
-    }, 3000);
+    }, 2800);
   };
   useEffect(() => () => { if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current); }, []);
 
@@ -382,11 +536,21 @@ export default function PlayerScreen() {
   }, []);
 
   const seekTo = async (ms: number) => {
+    repeatCycleTokenRef.current += 1;
+    repeatTransitionRef.current = false;
     setCurrentMs(ms);
     setProgress(durationMs > 0 ? (ms / durationMs) * 100 : 0);
+    const targetIdx = items.length ? findTranscriptIndex(items, ms / 1000) : 0;
+    setTranscriptIdx(targetIdx);
+    setWordIdx(-1);
+    repeatSentenceIdxRef.current = targetIdx;
+    repeatRoundRef.current = 1;
+    setRepeatRound(1);
     try {
       if (!file?.uri) return;
-      try { await loadMain(); } catch (e: any) { console.warn('[Player] seekTo load failed:', file.uri, e?.message); return; }
+      if (!playableUriRef.current) {
+        try { await loadMain(); } catch (e: any) { console.warn('[Player] seekTo load failed:', file.uri, e?.message); return; }
+      }
       await seek(MAIN_ID, ms);
     } catch {
       console.warn('[Player] seekTo failed');
@@ -395,6 +559,9 @@ export default function PlayerScreen() {
 
   const seekToTranscriptIdx = async (index: number) => {
     setTranscriptIdx(index);
+    repeatSentenceIdxRef.current = index;
+    repeatRoundRef.current = 1;
+    setRepeatRound(1);
     setWordIdx(0); // 跳到句首，词高亮从第一个词起，避免残留上一句的高亮
     const item = items[index];
     if (!item) return;
@@ -407,6 +574,39 @@ export default function PlayerScreen() {
 
   // 稳定的 renderItem：仅依赖 transcriptIdx / wordIdx / 两个开关，不随播放位置
   // (currentMs) 每 tick 变化，避免整列表反复重建。
+  const toggleSubtitleSelection = useCallback((index: number) => {
+    if (!selectionMode) {
+      if (resumeTimerRef.current) {
+        clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
+      userScrollRef.current = true;
+    }
+    setSelectedSubtitleIndices(current => current.includes(index)
+      ? current.filter(value => value !== index)
+      : [...current, index].sort((a, b) => a - b));
+  }, [selectionMode]);
+
+  useEffect(() => {
+    if (selectionMode) {
+      if (resumeTimerRef.current) {
+        clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
+      userScrollRef.current = true;
+    } else {
+      userScrollRef.current = false;
+    }
+  }, [selectionMode]);
+
+  const handleSubtitlePress = useCallback((index: number) => {
+    if (selectedSubtitleIndices.length) {
+      toggleSubtitleSelection(index);
+      return;
+    }
+    onRowPress(index);
+  }, [onRowPress, selectedSubtitleIndices.length, toggleSubtitleSelection]);
+
   const renderTranscriptRow = useCallback(
     ({ item, index }: { item: TranscriptItem; index: number }) => (
       <TranscriptRow
@@ -416,11 +616,24 @@ export default function PlayerScreen() {
         readingIdx={index === transcriptIdx ? wordIdx : -1}
         showRomaja={showRomaja}
         showTranslation={showTranslation}
-        onPress={onRowPress}
+        selected={selectedSubtitleIndices.includes(index)}
+        selectionMode={selectionMode}
+        onPress={handleSubtitlePress}
+        onLongPress={toggleSubtitleSelection}
       />
     ),
-    [transcriptIdx, wordIdx, showRomaja, showTranslation, onRowPress],
+    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection],
   );
+
+  const toggleRomajaStable = () => {
+    userScrollRef.current = true;
+    setShowRomaja(value => !value);
+  };
+
+  const toggleTranslationStable = () => {
+    userScrollRef.current = true;
+    toggleTranslation();
+  };
 
   const changeRate = async (r: number) => {
     setSpeed(r);
@@ -428,185 +641,496 @@ export default function PlayerScreen() {
     try { await setRate(MAIN_ID, r); } catch {}
   };
 
-  const changeLoop = async (l: boolean) => {
-    loopRef.current = l;
-    setLoopMode(l);
-    try { await setLooping(MAIN_ID, l); } catch {}
+  const changeRepeatTimes = (times: number) => {
+    repeatCycleTokenRef.current += 1;
+    repeatTransitionRef.current = false;
+    repeatTimesRef.current = times;
+    repeatRoundRef.current = 1;
+    repeatSentenceIdxRef.current = transcriptIdxRef.current;
+    setRepeatTimes(times);
+    setRepeatRound(1);
+    setRepeatSheetVisible(false);
   };
 
   const echoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const echoActiveRef = useRef(false);
+  const echoPreviewRef = useRef(false);
 
-  // ── Echo — plays a single sentence from the ORIGINAL audio on repeat ──
-  const playEchoLoop = async (index: number) => {
-    if (!echoActiveRef.current) return;
+  // ── Echo：听原声 → 回想 → 录音跟读 → 回听录音 → 下一句。──
+  const beginEchoPhase = (phase: 'listening' | 'recall' | 'recording', duration: number) => {
+    if (echoPhaseProgressTimerRef.current) clearInterval(echoPhaseProgressTimerRef.current);
+    const startedAt = Date.now();
+    setEchoPhase(phase);
+    setEchoPhaseProgress(0);
+    setEchoPhaseRemaining(Math.ceil(duration / 1000));
+    echoPhaseProgressTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setEchoPhaseProgress(Math.min(elapsed / duration, 1));
+      setEchoPhaseRemaining(Math.max(Math.ceil((duration - elapsed) / 1000), 0));
+      if (elapsed >= duration && echoPhaseProgressTimerRef.current) {
+        clearInterval(echoPhaseProgressTimerRef.current);
+        echoPhaseProgressTimerRef.current = null;
+      }
+    }, 100);
+  };
+
+  const stopEchoStageMedia = async () => {
+    echoRunTokenRef.current += 1;
+    echoActiveRef.current = false;
+    echoPreviewRef.current = false;
+    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+    if (echoPhaseProgressTimerRef.current) { clearInterval(echoPhaseProgressTimerRef.current); echoPhaseProgressTimerRef.current = null; }
+    await pause(MAIN_ID).catch(() => {});
+    if (echoRecordingRef.current) {
+      echoRecordingRef.current = false;
+      try { await echoReviewPlayerRef.current.stopRecorder(); } catch {}
+    }
+    try { echoReviewPlayerRef.current.removePlayBackListener(); } catch {}
+    try { await echoReviewPlayerRef.current.stopPlayer(); } catch {}
+    setEchoPlaying(false);
+    setEchoPhaseProgress(0);
+    setEchoPhaseRemaining(0);
+  };
+
+  const playEchoPreview = async (index: number) => {
+    if (!echoPreviewRef.current) return;
     const item = items[index];
     if (!item) return;
-
-    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
-
+    let fallbackSec = durationMs / 1000;
+    if (fallbackSec <= itemStartSec(item)) {
+      try { fallbackSec = (await getStatus(MAIN_ID)).duration / 1000; } catch {}
+    }
     const startMs = itemStartSec(item) * 1000;
-    // 单句循环用句子自己的精确 end，避免蹭到下一句 / 提前切断。
-    const endMs = itemEndSec(item, items[index + 1], durationMs / 1000) * 1000;
-    // Wall-clock duration must account for playback rate: at 0.5× the segment
-    // takes twice as long to play, at 2× half as long. Without this the loop
-    // cut off early (slow) or ran into the next sentence (fast).
-    const dur = (endMs - startMs) / (rateRef.current || 1);
-
+    const endMs = itemEndSec(item, items[index + 1], fallbackSec) * 1000;
+    const previewMs = Math.max((endMs - startMs) / (rateRef.current || 1), 500);
     try {
       await seek(MAIN_ID, startMs);
       await play(MAIN_ID);
       setEchoPlaying(true);
-
       echoTimeoutRef.current = setTimeout(async () => {
-        if (!echoActiveRef.current) return;
-        setEchoPlaying(false);
+        if (!echoPreviewRef.current || echoIdxRef.current !== index) return;
         await pause(MAIN_ID).catch(() => {});
-        if (echoActiveRef.current && echoIdxRef.current === index) {
-          await new Promise(r => setTimeout(r, 800));
-          playEchoLoop(index).catch(() => {});
-        }
-      }, dur);
-    } catch (e) {
+        setEchoPlaying(false);
+        echoTimeoutRef.current = setTimeout(() => playEchoPreview(index).catch(() => {}), 800);
+      }, previewMs);
+    } catch {
       setEchoPlaying(false);
     }
   };
 
-  const startEcho = async () => {
-    // Stop main playback first
-    pause(MAIN_ID).catch(() => {});
+  const finishEchoSentence = (index: number, token: number) => {
+    if (!echoActiveRef.current || token !== echoRunTokenRef.current) return;
+    if (index >= items.length - 1) {
+      echoActiveRef.current = false;
+      setEchoRunning(false);
+      setEchoPhase('ready');
+      return;
+    }
+    const nextIdx = index + 1;
+    echoIdxRef.current = nextIdx;
+    setEchoIdx(nextIdx);
+    echoTimeoutRef.current = setTimeout(() => playEchoCycle(nextIdx, token).catch(() => {}), 500);
+  };
+
+  const reviewEchoRecording = async (index: number, token: number, rawPath: string) => {
+    if (!echoActiveRef.current || token !== echoRunTokenRef.current) return;
+    const uri = /^[a-z]+:\/\//i.test(rawPath) ? rawPath : `file://${rawPath}`;
+    if (!uri) throw new Error('没有生成录音文件');
+    if (echoPhaseProgressTimerRef.current) { clearInterval(echoPhaseProgressTimerRef.current); echoPhaseProgressTimerRef.current = null; }
+    setEchoPhase('reviewing');
+    setEchoPhaseProgress(0);
+    setEchoPhaseRemaining(0);
+    let completed = false;
+    try { echoReviewPlayerRef.current.removePlayBackListener(); } catch {}
+    echoReviewPlayerRef.current.addPlayBackListener(event => {
+      if (event.duration > 0) {
+        setEchoPhaseProgress(Math.min(event.currentPosition / event.duration, 1));
+        setEchoPhaseRemaining(Math.max(Math.ceil((event.duration - event.currentPosition) / 1000), 0));
+      }
+      if (completed || event.duration <= 0 || event.currentPosition < event.duration - 80) return;
+      completed = true;
+      try { echoReviewPlayerRef.current.removePlayBackListener(); } catch {}
+      echoReviewPlayerRef.current.stopPlayer().catch(() => {});
+      finishEchoSentence(index, token);
+    });
+    await echoReviewPlayerRef.current.startPlayer(uri);
+  };
+
+  const recordEchoSentence = async (index: number, token: number, sentenceMs: number) => {
+    if (!echoActiveRef.current || token !== echoRunTokenRef.current) return;
+    try {
+      try { await echoReviewPlayerRef.current.stopPlayer(); } catch {}
+      try { echoReviewPlayerRef.current.removePlayBackListener(); } catch {}
+      await echoReviewPlayerRef.current.startRecorder();
+      echoRecordingRef.current = true;
+      // 在原句时长基础上额外给 3 秒，让用户有时间起句和完成尾音。
+      const recordMs = Math.min(Math.max(sentenceMs + 3000, 4500), 15000);
+      beginEchoPhase('recording', recordMs);
+      echoTimeoutRef.current = setTimeout(async () => {
+        if (!echoActiveRef.current || token !== echoRunTokenRef.current) return;
+        let rawPath = '';
+        try { rawPath = (await echoReviewPlayerRef.current.stopRecorder()) || ''; } catch {}
+        echoRecordingRef.current = false;
+        if (!rawPath) {
+          setEchoRunning(false);
+          setEchoPhase('ready');
+          Alert.alert('录音失败', '没有生成跟读录音，请检查麦克风权限后重试。');
+          return;
+        }
+        reviewEchoRecording(index, token, rawPath).catch(() => {
+          setEchoRunning(false);
+          setEchoPhase('ready');
+          Alert.alert('回放失败', '跟读录音暂时无法播放，请重试。');
+        });
+      }, recordMs);
+    } catch (error: any) {
+      echoRecordingRef.current = false;
+      setEchoRunning(false);
+      setEchoPhase('ready');
+      Alert.alert('录音失败', error?.message || '无法启动麦克风');
+    }
+  };
+
+  const playEchoCycle = async (index: number, existingToken?: number) => {
+    if (!echoActiveRef.current) return;
+    const item = items[index];
+    if (!item) return;
+    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
+    const token = existingToken ?? echoRunTokenRef.current;
+    const startMs = itemStartSec(item) * 1000;
+    let fallbackSec = durationMs / 1000;
+    if (fallbackSec <= itemStartSec(item)) {
+      try { fallbackSec = (await getStatus(MAIN_ID)).duration / 1000; } catch {}
+    }
+    const endMs = itemEndSec(item, items[index + 1], fallbackSec) * 1000;
+    const originalMs = Math.max((endMs - startMs) / (rateRef.current || 1), 500);
+
+    try {
+      beginEchoPhase('listening', originalMs);
+      setEchoRunning(true);
+      await seek(MAIN_ID, startMs);
+      await play(MAIN_ID);
+      setEchoPlaying(true);
+      echoTimeoutRef.current = setTimeout(async () => {
+        if (!echoActiveRef.current || token !== echoRunTokenRef.current) return;
+        await pause(MAIN_ID).catch(() => {});
+        setEchoPlaying(false);
+        const recallMs = Math.min(Math.max(originalMs * 0.8, 2000), 4500);
+        beginEchoPhase('recall', recallMs);
+        echoTimeoutRef.current = setTimeout(
+          () => recordEchoSentence(index, token, originalMs).catch(() => {}),
+          recallMs,
+        );
+      }, originalMs);
+    } catch {
+      setEchoPlaying(false);
+      setEchoRunning(false);
+      setEchoPhase('ready');
+    }
+  };
+
+  const requestEchoMicrophone = async () => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('需要麦克风权限', '开启回声训练需要录制并回放你的跟读。');
+        return false;
+      }
+    }
+    if (echoMicPrimedRef.current) return true;
+    // 这个录音库在 iOS 使用 playAndRecord + allowBluetooth，保留耳机路由；旧的
+    // AudioRecord 只设置 playAndRecord，会让 AirPods/蓝牙耳机被系统切断。
+    try {
+      await echoReviewPlayerRef.current.startRecorder();
+      await new Promise(resolve => setTimeout(resolve, 160));
+      await echoReviewPlayerRef.current.stopRecorder();
+      echoMicPrimedRef.current = true;
+      return true;
+    } catch {
+      Alert.alert('麦克风未授权', '请在系统设置中允许 x-lingo 使用麦克风。');
+      return false;
+    }
+  };
+
+  const openEchoPage = async () => {
+    await stopEchoStageMedia();
     setPlaying(false);
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-
-    // Ensure native player is loaded (may not be if user opens echo before playing)
     if (file?.uri) {
       try {
         await loadMain();
+        const status = await getStatus(MAIN_ID);
+        if (status.duration > 0) setDurationMs(status.duration);
       } catch (e: any) {
-        console.warn('[Player] startEcho load failed:', file.uri, e?.message);
-        Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传该视频后再试。');
+        console.warn('[Player] openEchoPage load failed:', file.uri, e?.message);
+        Alert.alert('文件不可用', '音频文件已被系统清理，请返回列表重新上传后再试。');
         return;
       }
     }
-
-    echoActiveRef.current = true;
     const idx = transcriptIdx;
     echoIdxRef.current = idx;
     setEchoIdx(idx);
-    setShowExplain(false);
+    setEchoPhase('ready');
+    setEchoRunning(false);
     setEchoVisible(true);
-    playEchoLoop(idx).catch(() => {});
+    echoPreviewRef.current = true;
+    playEchoPreview(idx).catch(() => {});
+  };
+
+  const startEchoTraining = async () => {
+    await stopEchoStageMedia();
+    if (!(await requestEchoMicrophone())) {
+      echoPreviewRef.current = true;
+      playEchoPreview(echoIdx).catch(() => {});
+      return;
+    }
+    // 麦克风预授权会把 iOS AVAudioSession 切到录音模式；重新加载原声播放器，
+    // 确保第一阶段不是“进度在走但没有声音”。
+    try {
+      await loadMain();
+      await setRate(MAIN_ID, rateRef.current);
+    } catch (error: any) {
+      Alert.alert('原声加载失败', error?.message || '无法播放当前句');
+      return;
+    }
+    const token = echoRunTokenRef.current;
+    echoActiveRef.current = true;
+    setEchoRunning(true);
+    playEchoCycle(echoIdx, token).catch(() => {});
   };
 
   const stopEcho = () => {
-    echoActiveRef.current = false;
-    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
-    pause(MAIN_ID).catch(() => {});
-    setEchoPlaying(false);
-    setShowExplain(false);
+    pendingExplainIdxRef.current = null;
+    stopEchoStageMedia().catch(() => {});
+    setEchoRunning(false);
+    setEchoPhase('ready');
     setEchoVisible(false);
-    // Do NOT resume main playback — user dismissed the echo modal, so stop means stop
   };
   stopEchoRef.current = stopEcho;
 
-  const echoJump = (dir: -1 | 1) => {
-    const ni = echoIdx + dir;
-    if (ni < 0 || ni >= items.length) return;
-    echoIdxRef.current = ni; setEchoIdx(ni);
-    setEchoPlaying(false);
-    // Auto-show explain if the new sentence already has cached explain in store
-    setShowExplain(!!items[ni]?.explain);
-    if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
-    playEchoLoop(ni).catch(() => {});
-  };
-
-  const echoPauseResume = async () => {
-    if (echoPlaying) {
-      if (echoTimeoutRef.current) { clearTimeout(echoTimeoutRef.current); echoTimeoutRef.current = null; }
-      await pause(MAIN_ID);
-      setEchoPlaying(false);
-    } else {
-      playEchoLoop(echoIdx).catch(() => {});
+  const echoJump = async (dir: -1 | 1) => {
+    const nextIdx = echoIdx + dir;
+    if (nextIdx < 0 || nextIdx >= items.length) return;
+    const wasRunning = echoRunning;
+    const wasPreviewing = echoPreviewRef.current;
+    await stopEchoStageMedia();
+    echoIdxRef.current = nextIdx;
+    setEchoIdx(nextIdx);
+    setEchoPhase('ready');
+    setEchoRunning(false);
+    if (wasRunning) {
+      const token = echoRunTokenRef.current;
+      echoActiveRef.current = true;
+      setEchoRunning(true);
+      playEchoCycle(nextIdx, token).catch(() => {});
+    } else if (wasPreviewing) {
+      echoPreviewRef.current = true;
+      playEchoPreview(nextIdx).catch(() => {});
     }
   };
 
-  const echoExplain = async () => {
-    const sentence = items[echoIdx]?.ko;
-    if (!sentence || explaining) return;
+  const echoPauseResume = async () => {
+    if (echoRunning) {
+      await stopEchoStageMedia();
+      setEchoRunning(false);
+      setEchoPhase('ready');
+      try {
+        await loadMain();
+        await setRate(MAIN_ID, rateRef.current);
+        echoPreviewRef.current = true;
+        playEchoPreview(echoIdx).catch(() => {});
+      } catch {}
+    } else {
+      await startEchoTraining();
+    }
+  };
 
-    // Check store first — explain persists alongside transcript
-    const cached = items[echoIdx]?.explain;
-    if (cached) { setShowExplain(true); return; }
+  const toggleEchoPreview = async () => {
+    if (echoRunning) return;
+    if (echoPreviewRef.current) {
+      await stopEchoStageMedia();
+      setEchoPhase('ready');
+      return;
+    }
+    try {
+      await loadMain();
+      await setRate(MAIN_ID, rateRef.current);
+      echoPreviewRef.current = true;
+      playEchoPreview(echoIdx).catch(() => {});
+    } catch (error: any) {
+      Alert.alert('播放失败', error?.message || '无法播放当前句');
+    }
+  };
 
-    setShowExplain(true);
+  const changeEchoRate = async (rate: number) => {
+    const wasPreviewing = echoPreviewRef.current;
+    await changeRate(rate);
+    if (!echoRunning) {
+      await stopEchoStageMedia();
+      if (wasPreviewing) {
+        echoPreviewRef.current = true;
+        playEchoPreview(echoIdx).catch(() => {});
+      }
+      return;
+    }
+    await stopEchoStageMedia();
+    const token = echoRunTokenRef.current;
+    echoActiveRef.current = true;
+    setEchoRunning(true);
+    playEchoCycle(echoIdx, token).catch(() => {});
+  };
+
+  const presentPendingExplain = () => {
+    const index = pendingExplainIdxRef.current;
+    if (index == null) return;
+    pendingExplainIdxRef.current = null;
+    setExplainIdx(index);
+    setExplainIndices([index]);
+    setMultiExplain(undefined);
+    setExplainVisible(true);
+  };
+
+  const openExplain = async (index: number) => {
+    if (echoVisible) {
+      // iOS 不可靠地支持 pageSheet Modal 之上再展示另一个 Modal。先完整收起
+      // 回声页，等 onDismiss 后再展示讲解，避免留下不可点击的透明遮罩。
+      await stopEchoStageMedia();
+      setEchoRunning(false);
+      setEchoPhase('ready');
+      explainFromEchoRef.current = true;
+      pendingExplainIdxRef.current = index;
+      setEchoVisible(false);
+      if (Platform.OS === 'android') setTimeout(presentPendingExplain, 400);
+      return;
+    }
+    explainFromEchoRef.current = false;
+    setExplainIdx(index);
+    setExplainIndices([index]);
+    setMultiExplain(undefined);
+    setExplainVisible(true);
+  };
+
+  const openSelectedExplain = () => {
+    if (!selectedSubtitleIndices.length) return;
+    const indices = [...selectedSubtitleIndices].sort((a, b) => a - b);
+    setExplainIdx(indices[0]);
+    setExplainIndices(indices);
+    setMultiExplain(undefined);
+    setSelectedSubtitleIndices([]);
+    setExplainVisible(true);
+  };
+
+  const closeExplain = () => {
+    setExplainVisible(false);
+    if (!explainFromEchoRef.current) return;
+    explainFromEchoRef.current = false;
+    setTimeout(() => setEchoVisible(true), 450);
+  };
+
+  const ensureExplain = useCallback(async () => {
+    const indices = explainIndices.length ? explainIndices : [explainIdx];
+    const sentence = indices.map(index => items[index]?.ko).filter(Boolean).join('\n');
+    const cachedExplain = indices.length === 1 ? items[indices[0]]?.explain : multiExplain;
+    if (!sentence || explaining || cachedExplain || !activeFileId) return;
     setExplaining(true);
     try {
       const { deepSeekExplain } = await import('../../services/deepseek');
       const result = await deepSeekExplain(sentence);
-      useListenStore.getState().setExplain(activeFileId!, echoIdx, result);
+      if (indices.length === 1) {
+        useListenStore.getState().setExplain(activeFileId, indices[0], result);
+      } else {
+        setMultiExplain(result);
+      }
     } catch (e) {
-      useListenStore.getState().setExplain(activeFileId!, echoIdx, { words: [], grammar: [], examples: [], usage: '讲解请求失败，请重试' } as NonNullable<typeof items[0]['explain']>);
+      Alert.alert('讲解失败', '暂时无法生成讲解，请稍后再试。');
     } finally {
       setExplaining(false);
     }
-  };
+  }, [activeFileId, explainIdx, explainIndices, explaining, items, multiExplain]);
 
-  const echoCopy = () => {
+  const exportSubtitles = async () => {
+    if (!items.length) {
+      Alert.alert('暂无字幕', '识别完成后才能导出字幕。');
+      return;
+    }
     try {
-      require('react-native/Libraries/Components/Clipboard/Clipboard').default.setString(items[echoIdx]?.ko || '');
-      setEchoCopied(true); setTimeout(() => setEchoCopied(false), 1500);
-    } catch {}
+      const title = file?.name || '精听字幕';
+      const safeName = title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || '精听字幕';
+      const body = items
+        .map(item => `<p class="korean">${escapeHtml(item.ko || '')}</p>`)
+        .join('\n');
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        @page{size:A4;margin:20mm 18mm 20mm 20mm}
+        body{font-family:Gulim,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:#111;margin:0;padding:0}
+        table.study-sheet{width:100%;border-collapse:collapse;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt}
+        tr.body-row{height:225mm}
+        td.content{width:80%;vertical-align:top;padding:0 10mm 0 0}
+        td.notes{width:20%;vertical-align:top;padding:0;border-left:.75pt solid #b8b8b8;color:#fff;font-size:1pt;line-height:1pt}
+        p.korean{font-family:Gulim,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:12pt;font-weight:400;line-height:1.65;letter-spacing:.2pt;margin:0 0 14pt 0;padding:0;page-break-inside:avoid}
+      </style></head><body><table class="study-sheet" width="100%" cellspacing="0" cellpadding="0"><colgroup><col width="80%"><col width="20%"></colgroup><tr class="body-row"><td class="content" width="80%">${body}</td><td class="notes" width="20%">&nbsp;</td></tr></table></body></html>`;
+      const path = `${DocumentDirectoryPath}/${safeName}_字幕.doc`;
+      await writeFile(path, html, 'utf8');
+      await Share.open({
+        url: `file://${path}`,
+        type: 'application/msword',
+        filename: `${safeName}_字幕.doc`,
+        title: '导出字幕 Word',
+        failOnCancel: false,
+      });
+    } catch (error: any) {
+      Alert.alert('导出失败', error?.message || '暂时无法生成字幕文件');
+    }
   };
 
-  // ── Echo word tap → open inline lookup sheet (no navigation) ──
-  const handleEchoWordPress = (word: string) => {
-    const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
-    if (!clean) return;
-    setEchoWord(clean);
-  };
+  const openMoreMenu = () => {
+    const recognitionLabel = transcribing
+      ? '字幕识别中'
+      : items.length > 0 ? '重新识别字幕' : '识别字幕';
 
-  const saveEchoWord = () => {
-    if (!echoWord || echoWordSaved) { setEchoWord(null); return; }
-    const data = echoWordLookup.data;
-    const isLoanword = /^[a-zA-Z]+$/.test(echoWord);
-    addWord({
-      id: Date.now().toString(),
-      ko: echoWord,
-      base: data?.base || echoWord,
-      roma: romanize(echoWord),
-      pos: data?.pos || (isLoanword ? '외래어 (外来词)' : '명사 (名词)'),
-      meaning: data?.meanings?.join('；') || `${echoWord} 的中文释义`,
-      example: data?.example || '',
-      source: `AI 精听回声跟读 · ${file?.name || ''}`,
-      tags: isLoanword ? ['外来词'] : ['常用'],
-      mastered: false,
-      isLoanword,
-      section: 'listen',
-      savedAt: Date.now(),
-    });
-    setEchoWord(null);
+    if (Platform.OS === 'ios') {
+      const options = items.length > 0
+        ? ['取消', recognitionLabel, '导出字幕文档']
+        : ['取消', recognitionLabel];
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: 0,
+          disabledButtonIndices: transcribing ? [1] : undefined,
+        },
+        (index) => {
+          if (index === 1 && !transcribing) startTranscription();
+          if (index === 2) exportSubtitles();
+        },
+      );
+      return;
+    }
+
+    Alert.alert('更多操作', undefined, [
+      { text: '取消', style: 'cancel' },
+      { text: recognitionLabel, onPress: transcribing ? undefined : startTranscription },
+      ...(items.length > 0 ? [{ text: '导出字幕文档', onPress: exportSubtitles }] : []),
+    ]);
   };
 
   // ── Render ──
   return (
     <View style={[S.flex1, S.bg]}>
       {/* Header */}
-      <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: 16 }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
-        <TouchableOpacity onPress={() => { unload(MAIN_ID).catch(() => {}); navigation.goBack(); }}>
+      <View style={[centeredContent(), { paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: isTablet ? 24 : 16 }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="返回" style={[S.center, { width: 40, height: 40, marginLeft: -8 }]} onPress={() => { unload(MAIN_ID).catch(() => {}); navigation.goBack(); }}>
           <ChevronLeft size={22} color={C.accent} />
         </TouchableOpacity>
-        <Text style={[S.textSm, S.text, S.semibold, { flex: 1, marginLeft: 8 }]} numberOfLines={1}>
+        <Text style={[S.textSm, S.text, S.semibold, { flex: 1 }]} numberOfLines={1}>
           {file?.name || '精听'}
         </Text>
         <TouchableOpacity
-          style={[S.bgAccent15, S.roundedSM, { paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 5 }]}
-          onPress={startTranscription}
-          disabled={transcribing}
+          accessibilityRole="button"
+          accessibilityLabel="更多操作"
+          style={[S.center, { width: 40, height: 40, marginRight: -6 }]}
+          onPress={openMoreMenu}
         >
-          {transcribing ? <ActivityIndicator size="small" color={C.accent} /> : null}
-          <Text style={[S.textXs, S.textAccent, S.semibold]}>{transcribing ? '识别中' : '识别'}</Text>
+          <MoreHorizontal size={22} color={C.text2} />
         </TouchableOpacity>
-        <Text style={[S.textXxs, S.text3, { marginLeft: 6 }]}>{BUILD_TAG}</Text>
       </View>
 
       {/* Transcript area */}
@@ -671,56 +1195,99 @@ export default function PlayerScreen() {
               <Text style={[S.textXs, S.semibold, { color: C.pink }]}>点此重试</Text>
             </TouchableOpacity>
           ) : null}
-          <FlatList ref={transcriptListRef} style={S.flex1} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }} data={items} keyExtractor={(_, i) => i.toString()}
-            extraData={`${transcriptIdx}:${wordIdx}:${showTranslation}:${showRomaja}`}
+          <FlatList ref={transcriptListRef} style={S.flex1} contentContainerStyle={[centeredContent(900), { paddingHorizontal: isTablet ? 24 : 16, paddingTop: 8, paddingBottom: 8 }]} data={items} keyExtractor={(_, i) => i.toString()}
+            extraData={`${transcriptIdx}:${wordIdx}:${showTranslation}:${showRomaja}:${selectedSubtitleIndices.join(',')}`}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onScrollBeginDrag={onUserScrollStart}
             onScrollEndDrag={scheduleAutoResume}
             onMomentumScrollEnd={scheduleAutoResume}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              transcriptListRef.current?.scrollToOffset({
+                offset: Math.max(0, averageItemLength * index),
+                animated: false,
+              });
+              setTimeout(() => {
+                try {
+                  transcriptListRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 });
+                } catch {}
+              }, 180);
+            }}
             windowSize={9}
             renderItem={renderTranscriptRow}
           />
         </View>
       )}
 
+      {selectionMode && (
+        <View style={[S.bgSurface, centeredContent(), { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: isTablet ? 24 : 16, paddingVertical: 10 }]}>
+          <View style={[S.flexRow, S.itemsCenter, { gap: 12 }]}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="取消选择字幕"
+              onPress={() => setSelectedSubtitleIndices([])}
+              style={[S.center, S.roundedFull, S.bgSurface2, { height: 44, paddingHorizontal: 18 }]}
+            >
+              <Text style={[S.textSm, S.text2]}>取消</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={[S.textSm, S.text, S.semibold]}>已选 {selectedSubtitleIndices.length} 句</Text>
+              <Text style={[S.textXxs, S.text3, { marginTop: 2 }]}>点击字幕继续选择</Text>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`询问 AI，已选择 ${selectedSubtitleIndices.length} 句字幕`}
+              onPress={openSelectedExplain}
+              style={[S.flexRow, S.center, S.roundedFull, S.bgAccent, { gap: 7, height: 44, paddingHorizontal: 20 }]}
+            >
+              <Sparkles size={17} color="#fff" />
+              <Text style={[S.textSm, S.textWhite, S.semibold]}>问 AI</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* ═══ Bottom control bar ═══ */}
       {items.length > 0 && (
-        <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, paddingHorizontal: 16, paddingBottom: insets.bottom + 6 }]}>
-          <View style={{ marginBottom: 8 }}>
-            <View style={{ height: 4, backgroundColor: C.border, borderRadius: 2 }}><View style={{ height: 4, backgroundColor: C.accent, borderRadius: 2, width: `${progress}%` as any }} /></View>
-            <View style={[S.spaceBetween, { marginTop: 4 }]}>
-              <Text style={[S.textXs, S.text3]}>{formatMs(currentMs)}</Text>
-              <View style={[S.flexRow, S.itemsCenter, { gap: 14 }]}>
-                <TouchableOpacity onPress={() => setShowRomaja(v => !v)}>
-                  <Text style={[S.textXs, S.semibold, showRomaja ? S.textAccent : S.text3]}>罗马音</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => toggleTranslation()}>
-                  <Text style={[S.textXs, showTranslation ? S.textAccent : S.text3]}>{showTranslation ? '隐藏译文' : '显示译文'}</Text>
-                </TouchableOpacity>
+        <View style={[S.bgSurface, centeredContent(), { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8, paddingHorizontal: isTablet ? 24 : 12, paddingBottom: insets.bottom + 4 }]}>
+          {/* 第一层：进度条离开屏幕左边缘，拖动手势不会与侧滑返回争抢。 */}
+          <SeekBar
+            value={currentMs}
+            maximumValue={durationMs}
+            onSeek={seekTo}
+            onDragChange={(dragging) => { seekingRef.current = dragging; }}
+          />
+          <View style={[S.flexRow, S.itemsCenter, S.spaceBetween, { paddingHorizontal: 10, marginTop: -1, marginBottom: 4 }]}>
+            <Text style={[S.textXxs, S.text3]}>{formatMs(currentMs)}</Text>
+            {repeatTimes > 1 ? (
+              <View style={S.itemsCenter}>
+                <View style={{ width: 64, height: 3, borderRadius: 2, overflow: 'hidden', backgroundColor: C.border }}>
+                  <View style={{ width: `${(repeatRound / repeatTimes) * 100}%` as any, height: 3, backgroundColor: C.accent }} />
+                </View>
               </View>
-            </View>
+            ) : <View />}
+            <Text style={[S.textXxs, S.text3]}>{formatMs(durationMs)}</Text>
           </View>
-          <View style={[S.row, S.justifyCenter, S.gap15, S.mb3]}>
-            {[0.5, 0.75, 1, 1.5, 2].map(s => (
-              <TouchableOpacity key={s} style={[{ paddingHorizontal: 10, paddingVertical: 4 }, S.roundedFull, playerSpeed === s ? [S.bgAccent, S.borderAccent] : { borderWidth: 1, borderColor: C.border }]} onPress={() => changeRate(s)}>
-                <Text style={[S.textXs, playerSpeed === s ? S.textWhite : S.text3]}>{s}×</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={[S.row, S.itemsCenter, S.justifyCenter, S.gap4]}>
-            <TouchableOpacity style={[S.center, { width: 36, height: 36 }]} onPress={() => changeLoop(!loopMode)}><Repeat size={20} color={loopMode ? C.accent : C.text2} /></TouchableOpacity>
-            <TouchableOpacity style={[{ width: 40, height: 40 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => seekToTranscriptIdx(Math.max(0, transcriptIdx - 1))}><SkipBack size={18} color={C.text} /></TouchableOpacity>
-            <TouchableOpacity style={[{ width: 56, height: 56 }, S.roundedFull, S.bgAccent, S.center]} onPress={togglePlayback}>{isPlaying ? <Pause size={26} color="#fff" fill="#fff" /> : <Play size={26} color="#fff" fill="#fff" />}</TouchableOpacity>
-            <TouchableOpacity style={[{ width: 40, height: 40 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => seekToTranscriptIdx(Math.min(items.length - 1, transcriptIdx + 1))}><SkipForward size={18} color={C.text} /></TouchableOpacity>
-            <TouchableOpacity style={[S.center, { width: 36, height: 36 }]} onPress={startEcho}><Volume2 size={20} color={C.text2} /></TouchableOpacity>
+
+          {/* 第二层：统一使用“图标 + 中文”，播放是唯一主按钮。 */}
+          <View style={[S.flexRow, S.itemsCenter, S.spaceBetween]}>
+            <PlayerAction label="音标" active={showRomaja} onPress={toggleRomajaStable} icon={<Text style={{ fontSize: 19, fontWeight: '700', color: showRomaja ? C.accent : C.text2 }}>A</Text>} />
+            <PlayerAction label="译文" active={showTranslation} onPress={toggleTranslationStable} icon={<Text style={{ fontSize: 17, fontWeight: '700', color: showTranslation ? C.accent : C.text2 }}>译</Text>} />
+            <PlayerAction label="倍速" onPress={() => setSpeedSheetVisible(true)} icon={<Text style={[S.semibold, { fontSize: 15, color: C.text }]}>{playerSpeed}×</Text>} />
+            <PlayerAction label="讲解" active={explainVisible} onPress={() => openExplain(transcriptIdx)} icon={<Text style={{ fontSize: 14, fontWeight: '800', color: explainVisible ? C.accent : C.text2 }}>AI</Text>} />
+            <PlayerAction label="重复" active={repeatTimes > 1} onPress={() => setRepeatSheetVisible(true)} icon={<Repeat size={20} color={repeatTimes > 1 ? C.accent : C.text2} />} badge={repeatTimes > 1 ? `${repeatTimes}` : undefined} />
+            <PlayerAction label="播放" primary onPress={togglePlayback} icon={isPlaying ? <Pause size={22} color="#fff" fill="#fff" /> : <Play size={22} color="#fff" fill="#fff" />} />
+            <PlayerAction label="回声" onPress={openEchoPage} icon={<AudioLines size={21} color={C.text2} />} />
           </View>
         </View>
       )}
 
       {/* ═══ Echo Modal ═══ */}
-      <Modal visible={echoVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={[S.flex1, S.bg]}>
+      <Modal visible={echoVisible} transparent statusBarTranslucent animationType="slide" onDismiss={presentPendingExplain} onRequestClose={stopEcho}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)' }}>
+        <View style={[S.bg, { width: sheetWidth, alignSelf: 'center', height: isTablet ? Math.min(height * 0.78, 720) : '68%', borderTopLeftRadius: 26, borderTopRightRadius: 26, overflow: 'hidden' }]}>
+          <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: C.text3, alignSelf: 'center', marginTop: 10 }} />
           {/* Header */}
-          <View style={[{ paddingTop: 16, paddingBottom: 12, paddingHorizontal: 16 }, S.flexRow, S.spaceBetween, S.itemsCenter]}>
+          <View style={[{ paddingTop: 8, paddingBottom: 8, paddingHorizontal: 16 }, S.flexRow, S.spaceBetween, S.itemsCenter]}>
             <View style={[S.flexRow, S.itemsCenter, S.gap2]}>
               <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: C.accent }} />
               <Text style={[S.textSm, S.semibold, S.text]}>回声跟读</Text>
@@ -735,15 +1302,12 @@ export default function PlayerScreen() {
               <Text style={[S.textXs, S.textAccent, S.semibold]}>{echoIdx + 1} / {items.length}</Text>
             </View>
 
-            {/* Korean text with romaja under each word — words tappable for lookup */}
+            {/* Korean text with romaja under each word */}
             {items[echoIdx]?.ko ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-end', marginBottom: 12 }}>
                 {romanizeWords(items[echoIdx].ko).map((p, wi) => (
                   <View key={wi} style={{ marginHorizontal: 6, marginBottom: 8, alignItems: 'center' }}>
-                    <Text
-                      style={[S.text, S.bold, { fontSize: 18, lineHeight: 24, letterSpacing: 0.5, textDecorationLine: 'underline', textDecorationColor: 'rgba(124,92,252,0.3)' }]}
-                      onPress={() => handleEchoWordPress(p.ko)}
-                    >
+                    <Text style={[S.text, S.bold, { fontSize: 18, lineHeight: 24, letterSpacing: 0.5 }]}>
                       {p.ko}
                     </Text>
                     <Text style={[S.textXxs, { color: C.accent, marginTop: 2, letterSpacing: 0.3 }]}>
@@ -760,6 +1324,45 @@ export default function PlayerScreen() {
                 {items[echoIdx].zh}
               </Text>
             ) : null}
+
+            {(() => {
+              const phases = [
+                { key: 'listening', label: '听' },
+                { key: 'recall', label: '回想' },
+                { key: 'recording', label: '说' },
+                { key: 'reviewing', label: '回放' },
+              ];
+              const activeIndex = phases.findIndex(phase => phase.key === echoPhase);
+              const statusText = echoPhase === 'listening' ? '正在播放原声'
+                : echoPhase === 'recall' ? '回想刚才说了什么'
+                  : echoPhase === 'recording' ? '录音中'
+                    : echoPhase === 'reviewing' ? '正在回听你的录音'
+                      : echoPlaying ? '正在重复当前句 · 点击开启回声' : '点击下方按钮开启回声';
+              return (
+                <View style={{ width: '100%', marginTop: 22 }}>
+                  <View style={[S.flexRow, { gap: 8 }]}>
+                    {phases.map((phase, index) => {
+                      const fill = index < activeIndex ? 1 : index === activeIndex ? echoPhaseProgress : 0;
+                      const isActive = index === activeIndex;
+                      return (
+                        <View key={phase.key} style={[S.center, S.roundedSM, { flex: 1, height: 54, overflow: 'hidden', backgroundColor: C.surface2 }]}>
+                          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fill * 100}%` as any, backgroundColor: isActive && echoPhase === 'recording' ? 'rgba(0,184,148,0.28)' : 'rgba(124,92,252,0.20)' }} />
+                          <Text style={[S.textSm, S.semibold, { color: isActive ? (echoPhase === 'recording' ? C.green : C.accent) : C.text2 }]}>{phase.label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={[S.flexRow, S.center, { gap: 7, marginTop: 12 }]}>
+                    {echoPhase === 'recording' ? (
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.pink }} />
+                    ) : echoPhase !== 'ready' ? <AudioLines size={14} color={C.accent} /> : null}
+                    <Text style={[S.textXs, echoPhase === 'recording' ? { color: C.pink } : S.textAccent, S.semibold]}>
+                      {statusText}{echoPhase !== 'ready' && echoPhaseRemaining > 0 ? ` · ${echoPhaseRemaining}s` : ''}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* AI Explain section — reads from store (persisted across restarts) */}
             {showExplain && (
@@ -952,7 +1555,7 @@ export default function PlayerScreen() {
                     { paddingHorizontal: 12, paddingVertical: 6 }, S.roundedFull,
                     playerSpeed === s ? [S.bgAccent, S.borderAccent] : { borderWidth: 1, borderColor: C.border },
                   ]}
-                  onPress={() => changeRate(s)}
+                  onPress={() => changeEchoRate(s)}
                 >
                   <Text style={[S.textXs, playerSpeed === s ? S.textWhite : S.text3]}>{s}×</Text>
                 </TouchableOpacity>
@@ -960,73 +1563,74 @@ export default function PlayerScreen() {
             </View>
 
             {/* Main controls */}
-            <View style={[S.row, S.itemsCenter, S.justifyCenter, S.gap5]}>
-              {/* Copy */}
-              <TouchableOpacity style={[S.center, { width: 44, height: 44 }]} onPress={echoCopy}>
-                {echoCopied ? <Copy size={20} color={C.green} /> : <Copy size={20} color={C.text2} />}
+            <View style={[S.row, S.itemsCenter, S.justifyCenter]}>
+              {/* Auto echo mode */}
+              <TouchableOpacity style={[S.center, { flex: 1, height: 68 }]} onPress={echoPauseResume}>
+                <View style={[{ width: 42, height: 42 }, S.roundedFull, echoRunning ? S.bgAccent15 : S.bgSurface2, S.center]}>
+                  {echoRunning ? <Pause size={20} color={C.accent} fill={C.accent} /> : <AudioLines size={20} color={C.accent} />}
+                </View>
+                <Text style={[S.textXxs, S.textAccent, { marginTop: 3 }]}>{echoRunning ? '停止回声' : '自动回声'}</Text>
               </TouchableOpacity>
 
               {/* Skip back */}
-              <TouchableOpacity style={[{ width: 48, height: 48 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => echoJump(-1)} disabled={echoIdx <= 0}>
-                <SkipBack size={22} color={echoIdx <= 0 ? C.text3 : C.text} />
+              <TouchableOpacity style={[S.center, { flex: 1, height: 68 }]} onPress={() => echoJump(-1)} disabled={echoIdx <= 0}>
+                <View style={[{ width: 42, height: 42 }, S.roundedFull, S.bgSurface2, S.center]}><SkipBack size={20} color={echoIdx <= 0 ? C.text3 : C.text} /></View>
+                <Text style={[S.textXxs, S.text3, { marginTop: 3 }]}>上一句</Text>
               </TouchableOpacity>
 
-              {/* Play / Pause */}
-              <TouchableOpacity style={[{ width: 72, height: 72 }, S.roundedFull, S.bgAccent, S.center, { shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 }]} onPress={echoPauseResume}>
-                {echoPlaying ? <Pause size={32} color="#fff" fill="#fff" /> : <Play size={32} color="#fff" fill="#fff" />}
+              {/* Current sentence loop play / pause */}
+              <TouchableOpacity style={[S.center, { flex: 1.15, height: 78, opacity: echoRunning ? 0.45 : 1 }]} onPress={toggleEchoPreview} disabled={echoRunning}>
+                <View style={[{ width: 56, height: 56 }, S.roundedFull, S.bgAccent, S.center, { shadowColor: C.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 9, elevation: 5 }]}>
+                  {echoPreviewRef.current && echoPlaying ? <Pause size={25} color="#fff" fill="#fff" /> : <Play size={25} color="#fff" fill="#fff" />}
+                </View>
+                <Text style={[S.textXxs, S.textAccent, S.semibold, { marginTop: 3 }]}>{echoPreviewRef.current && echoPlaying ? '暂停' : '播放'}</Text>
               </TouchableOpacity>
 
               {/* Skip forward */}
-              <TouchableOpacity style={[{ width: 48, height: 48 }, S.roundedFull, S.bgSurface2, S.center]} onPress={() => echoJump(1)} disabled={echoIdx >= items.length - 1}>
-                <SkipForward size={22} color={echoIdx >= items.length - 1 ? C.text3 : C.text} />
+              <TouchableOpacity style={[S.center, { flex: 1, height: 68 }]} onPress={() => echoJump(1)} disabled={echoIdx >= items.length - 1}>
+                <View style={[{ width: 42, height: 42 }, S.roundedFull, S.bgSurface2, S.center]}><SkipForward size={20} color={echoIdx >= items.length - 1 ? C.text3 : C.text} /></View>
+                <Text style={[S.textXxs, S.text3, { marginTop: 3 }]}>下一句</Text>
               </TouchableOpacity>
 
               {/* Explain */}
-              <TouchableOpacity style={[S.center, { width: 44, height: 44 }]} onPress={echoExplain}>
-                <BookOpen size={20} color={C.text2} />
+              <TouchableOpacity style={[S.center, { flex: 1, height: 68 }]} onPress={() => openExplain(echoIdx)}>
+                <View style={[{ width: 42, height: 42 }, S.roundedFull, S.bgAccent5, S.center]}><Sparkles size={19} color={C.accent} /></View>
+                <Text style={[S.textXxs, S.textAccent, { marginTop: 3 }]}>AI讲解</Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* ── Nested word-lookup sheet (stays inside echo modal) ── */}
-          <Modal visible={!!echoWord} transparent animationType="slide" onRequestClose={() => setEchoWord(null)}>
-            <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => setEchoWord(null)}>
-              <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 20, paddingBottom: insets.bottom + 24, maxHeight: '70%' as any }]}>
-                <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
-                <Text style={[S.textLg, S.bold, S.text]}>
-                  {echoWord}{' '}
-                  <Text style={[S.textXs, S.textAccent]}>{echoWord ? romanize(echoWord) : ''}</Text>
-                </Text>
-
-                {echoWordLookup.isLoading ? (
-                  <ActivityIndicator color={C.accent} style={{ marginVertical: 16 }} />
-                ) : (
-                  <>
-                    {echoWordLookup.data?.pos ? (
-                      <View style={[S.row, S.gap15, S.mt3]}>
-                        <View style={[S.bgAccent15, S.roundedFull, { paddingHorizontal: 8, paddingVertical: 2 }]}>
-                          <Text style={[S.textXs, S.textAccent, S.semibold]}>{echoWordLookup.data.pos}</Text>
-                        </View>
-                      </View>
-                    ) : null}
-                    <Text style={[S.textBase, S.text, S.mt3]}>{echoWordLookup.data?.meanings?.join('；') || '释义加载中...'}</Text>
-                    {echoWordLookup.data?.example ? (
-                      <Text style={[S.textSm, S.text2, S.mt2]}>{echoWordLookup.data.example}</Text>
-                    ) : null}
-                  </>
-                )}
-
-                <TouchableOpacity style={[S.py3, S.roundedFull, echoWordSaved ? { backgroundColor: C.green } : S.bgAccent, S.itemsCenter, S.mt5]} onPress={saveEchoWord}>
-                  <View style={[S.flexRow, S.itemsCenter, S.gap1]}>
-                    {echoWordSaved ? <Star size={14} color="#fff" fill="#fff" /> : <Star size={14} color="#fff" />}
-                    <Text style={[S.textSm, S.textWhite, S.semibold]}>{echoWordSaved ? '已在学习库' : '收藏到学习库'}</Text>
-                  </View>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
+        </View>
         </View>
       </Modal>
+
+      <ChoiceSheet
+        visible={speedSheetVisible}
+        title="选择播放速度"
+        selected={playerSpeed}
+        choices={[0.5, 0.75, 1, 1.5, 2].map(value => ({ value, label: `${value}×` }))}
+        onSelect={(value) => { changeRate(value); setSpeedSheetVisible(false); }}
+        onClose={() => setSpeedSheetVisible(false)}
+        bottomInset={insets.bottom}
+      />
+
+      <RepeatSettingsSheet
+        visible={repeatSheetVisible}
+        value={repeatTimes}
+        onConfirm={changeRepeatTimes}
+        onClose={() => setRepeatSheetVisible(false)}
+        bottomInset={insets.bottom}
+      />
+
+      <AIExplainSheet
+        visible={explainVisible}
+        sentence={(explainIndices.length ? explainIndices : [explainIdx]).map(index => items[index]?.ko).filter(Boolean).join('\n')}
+        translation={(explainIndices.length ? explainIndices : [explainIdx]).map(index => items[index]?.zh).filter(Boolean).join('\n')}
+        explain={explainIndices.length > 1 ? multiExplain : items[explainIdx]?.explain}
+        sentenceCount={explainIndices.length}
+        explaining={explaining}
+        onRequestExplain={ensureExplain}
+        onClose={closeExplain}
+      />
 
       {/* Restoring-from-Qiniu overlay */}
       {restoring && (
@@ -1038,6 +1642,213 @@ export default function PlayerScreen() {
         </View>
       )}
     </View>
+  );
+}
+
+function SeekBar({ value, maximumValue, onSeek, onDragChange }: {
+  value: number;
+  maximumValue: number;
+  onSeek: (value: number) => Promise<void> | void;
+  onDragChange?: (dragging: boolean) => void;
+}) {
+  const [width, setWidth] = useState(0);
+  const [preview, setPreview] = useState(value);
+  const previewRef = useRef(value);
+  const draggingRef = useRef(false);
+  const barRef = useRef<View | null>(null);
+  const barLeftRef = useRef(0);
+
+  useEffect(() => {
+    if (!draggingRef.current) {
+      previewRef.current = value;
+      setPreview(value);
+    }
+  }, [value]);
+
+  const updateFromX = (x: number) => {
+    if (!width || maximumValue <= 0) return;
+    const next = Math.min(Math.max(x / width, 0), 1) * maximumValue;
+    previewRef.current = next;
+    setPreview(next);
+  };
+  const updateFromPageX = (pageX: number) => updateFromX(pageX - barLeftRef.current);
+  const measureBar = (then?: () => void) => {
+    barRef.current?.measureInWindow((x) => {
+      barLeftRef.current = x;
+      then?.();
+    });
+  };
+  const finishSeek = (pageX: number) => {
+    updateFromPageX(pageX);
+    Promise.resolve(onSeek(previewRef.current)).finally(() => {
+      draggingRef.current = false;
+      onDragChange?.(false);
+    });
+  };
+  const percent = maximumValue > 0 ? Math.min(Math.max(preview / maximumValue, 0), 1) * 100 : 0;
+
+  return (
+    <View
+      ref={barRef}
+      accessibilityRole="adjustable"
+      accessibilityLabel="播放进度"
+      accessibilityValue={{ min: 0, max: Math.round(maximumValue / 1000), now: Math.round(preview / 1000) }}
+      style={{ height: 44, marginHorizontal: 20, justifyContent: 'center' }}
+      onLayout={event => {
+        setWidth(event.nativeEvent.layout.width);
+        measureBar();
+      }}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={event => {
+        const pageX = event.nativeEvent.pageX;
+        draggingRef.current = true;
+        onDragChange?.(true);
+        measureBar(() => updateFromPageX(pageX));
+      }}
+      onResponderMove={event => updateFromPageX(event.nativeEvent.pageX)}
+      onResponderRelease={event => finishSeek(event.nativeEvent.pageX)}
+      onResponderTerminate={() => {
+        draggingRef.current = false;
+        onDragChange?.(false);
+        setPreview(value);
+      }}
+    >
+      <View style={{ height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' }}>
+        <View style={{ width: `${percent}%` as any, height: 5, borderRadius: 3, backgroundColor: C.accent }} />
+      </View>
+      <View style={{
+        position: 'absolute', left: `${percent}%` as any, marginLeft: -13,
+        width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent,
+        borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center',
+        shadowColor: C.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4, elevation: 4,
+      }}>
+        <AudioLines size={12} color="#fff" strokeWidth={2.5} />
+      </View>
+    </View>
+  );
+}
+
+function PlayerAction({ label, icon, active, primary, badge, onPress }: {
+  label: string;
+  icon: ReactNode;
+  active?: boolean;
+  primary?: boolean;
+  badge?: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={[S.center, { flex: 1, minWidth: 42, height: 58 }]}
+    >
+      <View style={[S.center, S.roundedFull, primary
+        ? { width: 40, height: 40, backgroundColor: C.accent }
+        : { width: 34, height: 34, backgroundColor: active ? 'rgba(124,92,252,0.12)' : 'transparent' }]}>
+        {icon}
+        {badge ? (
+          <View style={[S.center, S.roundedFull, { position: 'absolute', right: -3, top: -3, minWidth: 16, height: 16, paddingHorizontal: 3, backgroundColor: C.accent }]}>
+            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[S.textXxs, { marginTop: 2, color: primary || active ? C.accent : C.text2 }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ChoiceSheet({ visible, title, subtitle, choices, selected, onSelect, onClose, bottomInset }: {
+  visible: boolean;
+  title: string;
+  subtitle?: string;
+  choices: { value: number; label: string; detail?: string }[];
+  selected: number;
+  onSelect: (value: number) => void;
+  onClose: () => void;
+  bottomInset: number;
+}) {
+  const { sheetWidth } = useResponsiveLayout();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity activeOpacity={1} onPress={onClose} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' }}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface, { width: sheetWidth, alignSelf: 'center', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 18, paddingTop: 18, paddingBottom: Math.max(bottomInset, 14) }]}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 16 }} />
+          <Text style={[S.textBase, S.semibold, S.text]}>{title}</Text>
+          {subtitle ? <Text style={[S.textXs, S.text2, { marginTop: 5, marginBottom: 8 }]}>{subtitle}</Text> : null}
+          <View style={{ marginTop: 8 }}>
+            {choices.map(choice => {
+              const active = choice.value === selected;
+              return (
+                <TouchableOpacity key={choice.value} onPress={() => onSelect(choice.value)} style={[S.flexRow, S.itemsCenter, { minHeight: 50, paddingHorizontal: 12, borderRadius: 10, backgroundColor: active ? 'rgba(124,92,252,0.10)' : 'transparent' }]}>
+                  <View style={[S.center, S.roundedFull, { width: 20, height: 20, borderWidth: 1.5, borderColor: active ? C.accent : C.text3 }]}>
+                    {active ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accent }} /> : null}
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[S.textSm, active ? S.textAccent : S.text, active ? S.semibold : null]}>{choice.label}</Text>
+                    {choice.detail ? <Text style={[S.textXxs, S.text3, { marginTop: 2 }]}>{choice.detail}</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+function RepeatSettingsSheet({ visible, value, onConfirm, onClose, bottomInset }: {
+  visible: boolean;
+  value: number;
+  onConfirm: (value: number) => void;
+  onClose: () => void;
+  bottomInset: number;
+}) {
+  const { sheetWidth } = useResponsiveLayout();
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { if (visible) setDraft(value); }, [visible, value]);
+  const clamp = (next: number) => Math.min(Math.max(Number.isFinite(next) ? Math.round(next) : 1, 1), 10);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity activeOpacity={1} onPress={onClose} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' }}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface, { width: sheetWidth, alignSelf: 'center', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 20, paddingTop: 18, paddingBottom: Math.max(bottomInset, 16) }]}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 16 }} />
+          <Text style={[S.textBase, S.semibold, S.text]}>当前句重复次数</Text>
+
+          <View style={[S.flexRow, S.itemsCenter, S.justifyCenter, { gap: 22, marginVertical: 24 }]}>
+            <TouchableOpacity onPress={() => setDraft(current => clamp(current - 1))} style={[S.center, S.roundedFull, S.bgSurface2, { width: 52, height: 52 }]}>
+              <Text style={[S.textLg, S.text]}>−</Text>
+            </TouchableOpacity>
+            <View style={S.center}>
+              <TextInput
+                value={String(draft)}
+                onChangeText={text => setDraft(clamp(Number(text.replace(/\D/g, '') || 1)))}
+                keyboardType="number-pad"
+                selectTextOnFocus
+                maxLength={2}
+                style={[S.text, S.bold, S.textCenter, S.roundedSM, { width: 82, height: 52, paddingVertical: 0, fontSize: 24, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2 }]}
+              />
+            </View>
+            <TouchableOpacity onPress={() => setDraft(current => clamp(current + 1))} style={[S.center, S.roundedFull, S.bgSurface2, { width: 52, height: 52 }]}>
+              <Text style={[S.textLg, S.text]}>＋</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[S.flexRow, { gap: 10 }]}>
+            <TouchableOpacity onPress={onClose} style={[S.center, S.roundedFull, S.bgSurface2, { flex: 1, height: 46 }]}>
+              <Text style={[S.textSm, S.text2]}>取消</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onConfirm(draft)} style={[S.center, S.roundedFull, S.bgAccent, { flex: 1, height: 46 }]}>
+              <Text style={[S.textSm, S.textWhite, S.semibold]}>应用</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
@@ -1053,23 +1864,50 @@ interface TranscriptRowProps {
   readingIdx: number; // 当前读到句内第几个词；-1 表示本行不高亮任何词
   showRomaja: boolean;
   showTranslation: boolean;
+  selected: boolean;
+  selectionMode: boolean;
   onPress: (index: number) => void;
+  onLongPress: (index: number) => void;
 }
 const TranscriptRow = memo(function TranscriptRow({
-  item, index, isActive, readingIdx, showRomaja, showTranslation, onPress,
+  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress,
 }: TranscriptRowProps) {
   const words = useMemo(() => romanizeWords(item.ko), [item.ko]);
+  const longPressedRef = useRef(false);
   return (
     <TouchableOpacity
       style={[
         S.py3, { paddingHorizontal: 12 }, S.roundedSM, S.mb1,
-        isActive
+        selected
+          ? { backgroundColor: 'rgba(124,92,252,0.14)', borderLeftWidth: 3, borderLeftColor: C.accent }
+          : isActive
           ? { backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }
           : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
       ]}
-      onPress={() => onPress(index)}
+      onPress={() => {
+        if (longPressedRef.current) {
+          longPressedRef.current = false;
+          return;
+        }
+        onPress(index);
+      }}
+      onLongPress={() => {
+        longPressedRef.current = true;
+        onLongPress(index);
+      }}
+      delayLongPress={350}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.time} 字幕${selected ? '，已选择' : ''}`}
+      accessibilityState={{ selected }}
     >
-      <Text style={[S.textXs, S.text3, S.mb1]}>{item.time}</Text>
+      <View style={[S.flexRow, S.itemsCenter, S.mb1, { gap: 8 }]}>
+        {selectionMode ? (
+          <View style={[S.center, S.roundedFull, { width: 21, height: 21, borderWidth: 1.5, borderColor: selected ? C.accent : C.border, backgroundColor: selected ? C.accent : C.surface }]}>
+            {selected ? <CheckCircle2 size={15} color="#fff" /> : null}
+          </View>
+        ) : null}
+        <Text style={[S.textXs, S.text3]}>{item.time}</Text>
+      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {words.map((p, wi) => {
           const isReading = isActive && wi === readingIdx;

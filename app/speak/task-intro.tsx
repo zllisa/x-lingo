@@ -6,12 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSpeakStore } from '../../stores/useSpeakStore';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function TaskIntroScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { pagePadding } = useResponsiveLayout();
   // The scenario was generated and stashed in the store before navigating here.
   const scenario = useSpeakStore((s) => s.activeScenario);
 
@@ -30,13 +32,13 @@ export default function TaskIntroScreen() {
 
   return (
     <View style={[S.flex1, S.bg]}>
-      <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8 }, S.px4, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
+      <View style={[centeredContent(820), { paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: pagePadding }, S.bgSurface, S.borderBottom, S.flexRow, S.itemsCenter]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[S.flexRow, S.itemsCenter]}>
           <ChevronLeft size={18} color={C.accent} /><Text style={[S.textSm, S.textAccent, S.semibold]}>返回</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={S.flex1} contentContainerStyle={{ padding: 20 }}>
+      <ScrollView style={S.flex1} contentContainerStyle={[centeredContent(820), { padding: pagePadding }]}>
         <View style={[S.center, S.mb4]}>
           <View style={[{ width: 64, height: 64, borderRadius: 32, marginBottom: 8 }, S.bgAccent15, S.center]}>
             <Theater size={32} color={C.accent} />
@@ -72,7 +74,7 @@ export default function TaskIntroScreen() {
         ))}
       </ScrollView>
 
-      <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, padding: 16, paddingBottom: insets.bottom + 16 }]}>
+      <View style={[S.bgSurface, centeredContent(820), { borderTopWidth: 1, borderTopColor: C.border, padding: pagePadding, paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity style={[S.bgAccent, S.roundedFull, { paddingVertical: 14 }, S.center, S.flexRow, S.gap1]} onPress={start}>
           <CheckCircle2 size={18} color="#fff" />
           <Text style={[S.textSm, S.textWhite, S.bold]}>开始对话</Text>

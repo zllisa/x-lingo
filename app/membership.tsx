@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, S } from '../utils/theme';
 import { useUsageStore } from '../stores/useUsageStore';
 import { formatUsageMinutes } from '../services/usage';
+import { centeredContent, useResponsiveLayout } from '../utils/responsive';
 
 const BENEFITS = [
   { label: 'AI 精听额度',       free: '体验 15 分钟', pro: '60 分钟/月' },
@@ -22,6 +23,7 @@ const PLANS = [
 export default function MembershipScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { pagePadding } = useResponsiveLayout();
   const usage = useUsageStore(s => s.usage);
   const refreshUsage = useUsageStore(s => s.refresh);
 
@@ -32,7 +34,7 @@ export default function MembershipScreen() {
         {/* decorative ring */}
         <View style={{ position: 'absolute', width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255,255,255,0.10)', top: -70, right: -50 }} />
 
-        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 28 }}>
+        <View style={[centeredContent(820), { paddingTop: insets.top + 8, paddingHorizontal: pagePadding, paddingBottom: 28 }]}>
           <View style={[S.spaceBetween, { height: 44 }]}>
             <TouchableOpacity onPress={() => navigation.goBack()}>
               <X size={24} color="rgba(255,255,255,0.85)" />
@@ -51,7 +53,7 @@ export default function MembershipScreen() {
 
       {/* ── White content area ── */}
       <View style={[S.flex1, S.bg, { borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -4 }]}>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}>
+        <ScrollView contentContainerStyle={[centeredContent(820), { padding: pagePadding, paddingBottom: insets.bottom + 24 }]}>
 
           {usage && (
             <View style={[S.bgSurface, S.border, { borderRadius: 16, padding: 15, marginBottom: 18 }]}>

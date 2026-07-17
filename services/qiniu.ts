@@ -1,5 +1,7 @@
 import CryptoJS from 'crypto-js';
-import { CachesDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
+import { CachesDirectoryPath, unlink, writeFile } from '@dr.pogodin/react-native-fs';
+import { NativeModules, Platform } from 'react-native';
+import { extractAudio } from './AudioExtractor';
 import {
   QINIU_ACCESS_KEY, QINIU_SECRET_KEY, QINIU_BUCKET,
   QINIU_DOMAIN, QINIU_ZONE,
@@ -14,6 +16,18 @@ const UPLOAD_HOSTS: Record<string, string> = {
 };
 
 function uploadHost() { return UPLOAD_HOSTS[QINIU_ZONE] || UPLOAD_HOSTS.z0; }
+
+type NativeUploadResult = { statusCode: number; body: string };
+const LargeFileUploader = NativeModules.LargeFileUploader as {
+  uploadMultipart: (
+    toUrl: string,
+    fileUri: string,
+    fileName: string,
+    mimeType: string,
+    fields: Record<string, string>,
+    headers: Record<string, string>,
+  ) => Promise<NativeUploadResult>;
+} | undefined;
 
 export function qiniuEnabled(): boolean {
   return !!(QINIU_ACCESS_KEY && QINIU_SECRET_KEY && QINIU_BUCKET && QINIU_DOMAIN);
@@ -69,6 +83,33 @@ export async function uploadToQiniu(fileUri: string, userId?: string): Promise<s
   const key = `${userPrefix(userId)}/source_${Date.now()}.${ext}`;
   const token = getUploadToken();
 
+  console.log('[Qiniu] Upload to', uploadHost(), 'key:', key, 'uri:', fileUri.substring(0, 80));
+
+  // RN fetch + FormData may hold multiple copies of a local video in memory on
+  // iOS. For long videos that causes an OS-level termination before JS can
+  // catch an error. The native uploader builds multipart data on disk and lets
+  // URLSession stream it from a file, keeping memory use nearly constant.
+  if (Platform.OS === 'ios') {
+    if (!LargeFileUploader) {
+      throw new Error('大文件上传模块不可用，请重新安装最新版 App');
+    }
+    const result = await LargeFileUploader.uploadMultipart(
+      uploadHost(),
+      fileUri,
+      `upload.${ext}`,
+      mimeByExt[ext] || 'application/octet-stream',
+      { token, key },
+      { Accept: 'application/json' },
+    );
+    console.log('[Qiniu] Native upload resp', result.statusCode, result.body.substring(0, 200));
+    let parsed: any = {};
+    try { parsed = JSON.parse(result.body); } catch {}
+    if (result.statusCode < 200 || result.statusCode >= 300 || parsed.error) {
+      throw new Error(`Qiniu upload: ${result.statusCode} ${result.body.substring(0, 200)}`);
+    }
+    return parsed.key || key;
+  }
+
   const formData = new FormData();
   formData.append('token', token);
   formData.append('key', key);
@@ -77,7 +118,6 @@ export async function uploadToQiniu(fileUri: string, userId?: string): Promise<s
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min
 
-  console.log('[Qiniu] Upload to', uploadHost(), 'key:', key, 'uri:', fileUri.substring(0, 80));
   try {
     const resp = await fetch(uploadHost(), { method: 'POST', body: formData, signal: controller.signal });
     const text = await resp.text();
@@ -219,10 +259,32 @@ export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
  * returned transcodeId and later call resumeTranscodeAudio() to get the WAV.
  */
 export async function uploadAndTriggerTranscode(videoUri: string, userId?: string): Promise<{ transcodeId: string; videoKey: string }> {
-  const key = await uploadToQiniu(videoUri, userId);
-  const transcodeId = await triggerTranscode(key);
-  // 返回 videoKey，转码完成后由调用方删除源视频以省存储。
-  return { transcodeId, videoKey: key };
+  const ext = (videoUri.split('?')[0].split('.').pop() || '').toLowerCase();
+  const isVideo = ['mp4', 'mov', 'm4v'].includes(ext);
+  let uploadUri = videoUri;
+  let extractedAudioUri: string | undefined;
+
+  try {
+    // A long/high-resolution video can exceed Qiniu's request-size limit even
+    // with a memory-safe uploader. Listening practice only needs its audio, so
+    // compress it locally first. A 13-minute M4A is normally only a small
+    // fraction of the original video's size.
+    if (Platform.OS === 'ios' && isVideo) {
+      extractedAudioUri = await extractAudio(videoUri);
+      uploadUri = extractedAudioUri;
+      console.log('[Qiniu] Extracted local audio before upload:', uploadUri);
+    }
+
+    const key = await uploadToQiniu(uploadUri, userId);
+    const transcodeId = await triggerTranscode(key);
+    // 返回源文件 key；云端 WAV 产出后由调用方删除以省存储。
+    return { transcodeId, videoKey: key };
+  } finally {
+    if (extractedAudioUri) {
+      const path = decodeURIComponent(extractedAudioUri.replace(/^file:\/\//, ''));
+      unlink(path).catch(() => {});
+    }
+  }
 }
 
 // 批量删除七牛对象（best-effort，失败只记日志不抛）。用于转码完成后清理源视频。

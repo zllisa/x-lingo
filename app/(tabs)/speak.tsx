@@ -9,6 +9,7 @@ import { useSpeakStore } from '../../stores/useSpeakStore';
 import { SpeakLevel } from '../../types';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const SCENARIO_SUGGESTIONS = ['便利店买东西', '咖啡店点单', '餐厅吃饭', '问路', '机场值机', '医院挂号'];
@@ -35,6 +36,7 @@ const accentShadow = {
 
 export default function SpeakScreen() {
   const navigation = useNavigation<Nav>();
+  const { isTablet, pagePadding } = useResponsiveLayout();
   const { mode, setMode, conversations } = useSpeakStore();
   const speakLevel = useProfileStore((s) => s.settings.speakLevel ?? 'beginner');
   const updateSettings = useProfileStore((s) => s.updateSettings);
@@ -68,7 +70,7 @@ export default function SpeakScreen() {
 
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
-      <View style={[S.flex1, S.px4, { paddingTop: 6 }]}>
+      <View style={[S.flex1, centeredContent(860), { paddingHorizontal: pagePadding, paddingTop: isTablet ? 18 : 6 }]}>
 
         {/* ── Header ── */}
         <View style={[S.spaceBetween, { marginTop: 10, marginBottom: 18 }]}>

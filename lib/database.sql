@@ -59,6 +59,7 @@ CREATE POLICY "Users can insert own sentences" ON sentences FOR INSERT WITH CHEC
 CREATE POLICY "Users can delete own sentences" ON sentences FOR DELETE USING (auth.uid() = user_id);
 
 -- 精听（每行 = 一个音频：meta + 文稿/翻译/AI讲解，存 JSONB；按 user_id + file_id 唯一）
+-- 保留 file_id = '__last_listen_study__' 的行保存该用户最近精听的进度与字幕位置。
 CREATE TABLE IF NOT EXISTS listen_files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users NOT NULL,

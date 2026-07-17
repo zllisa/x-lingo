@@ -360,7 +360,7 @@ export async function deepSeekTranslateBatch(texts: string[]): Promise<string[]>
   return arr.map((s: any) => String(s ?? '').trim());
 }
 
-const EXPLAIN_PROMPT = `You are a Korean language teacher. Given a Korean sentence, explain it in Chinese. Return ONLY valid JSON, no other text.
+const EXPLAIN_PROMPT = `You are a Korean language teacher. Given one or more consecutive Korean subtitle lines, treat them as a single piece of spoken context and explain them in Chinese. When multiple lines are provided, first infer the complete sentence or thought across subtitle boundaries instead of analyzing each line in isolation. Return ONLY valid JSON, no other text.
 
 JSON format:
 {
@@ -378,14 +378,48 @@ JSON format:
 }
 
 Rules:
-- "words": break the sentence into meaningful chunks, give Chinese meanings.
-- "grammar": explain each grammar pattern, sentence ending, particle, speech level, conjugation. For each, assign a "level": "beginner" (TOPIK 1-2), "intermediate" (TOPIK 3-4), or "advanced" (TOPIK 5-6).
-- "why": 用中文解释「为什么这样表达」——母语者选择这个说法的语气/语感/微妙差别，而不只是字面意思。1-3句。
+- 只讲对学习者真正有帮助、容易误解的内容；不要为了填满栏目重复同一解释。
+- "words": 只列关键词或不容易从整句译文看出的词，不要逐字复述整句翻译。
+- "grammar": 只解释真正出现的关键语法。不要把词义、缩写还原和普通语体标签重复放进 grammar。每项分配 "level": "beginner" (TOPIK 1-2), "intermediate" (TOPIK 3-4), or "advanced" (TOPIK 5-6).
+- "why": 只解释语气、语感或母语者选择这个说法的原因，不再复述 grammar 和整句翻译。1-2句。
 - "chunks": 句子里的「词块 / 固定搭配 / 惯用组合」，不是逐词，而是常一起出现、要整体记的组合。没有就返回 []。
 - "contractions": 句子里出现的「口语缩写 / 缩略形式」，还原成完整原型。例如 뭐→무엇、건→것은、해야지→해야 하지、난→나는。没有就返回 []。
-- "examples": 2-3 similar sentences using the same grammar patterns, with Chinese translations.
-- "usage": 1-2 sentences about when/where this sentence is used, formality level, alternatives.
+- "examples": 最多 2 个真正有助于迁移的相似句；没有必要时返回 []。
+- "usage": 只补充前面未提到的使用场景、礼貌程度或替代表达；没有新信息时返回空字符串。
 - If there are English loanwords, note them.`;
+
+const EXPLAIN_FOLLOW_UP_PROMPT = `你是一名简洁、可靠的韩语老师。用户正在围绕一条或连续多条韩语字幕提问。多条字幕可能只是同一个完整句子被切开的片段，应先结合全部上下文还原整体意思，不要孤立理解其中某一条。
+只回答用户本轮的问题，不要重新生成完整的逐词、语法、例句和使用场景分析，也不要重复已经说过的内容。
+默认使用简体中文；韩语例句保留韩文并附简短中文含义。回答控制在能解决问题的最短篇幅。`;
+
+export async function deepSeekExplainFollowUp(
+  sentence: string,
+  translation: string,
+  history: { role: 'user' | 'assistant'; text: string }[],
+): Promise<string> {
+  const context = `当前韩语字幕上下文：\n${sentence}\n已有中文译文：\n${translation || '无'}`;
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: EXPLAIN_FOLLOW_UP_PROMPT },
+        { role: 'user', content: context },
+        { role: 'assistant', content: '好的，我会只围绕这句话回答后续问题。' },
+        ...history.slice(-12).map(turn => ({ role: turn.role, content: turn.text })),
+      ],
+      temperature: 0.35,
+      max_tokens: 700,
+    }),
+  });
+  if (!response.ok) throw new Error(`DeepSeek explain follow-up error: ${response.status}`);
+  const data = await response.json();
+  return String(data.choices?.[0]?.message?.content || '').trim();
+}
 
 export async function deepSeekExplain(text: string): Promise<ExplainData> {
   const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {

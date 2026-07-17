@@ -10,11 +10,13 @@ import { azureTTS } from '../../services/azureTTS';
 import { Word } from '../../types';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 type WordDetailRoute = RouteProp<RootStackParamList, 'WordDetail'>;
 
 export default function WordDetailModal() {
   const navigation = useNavigation();
+  const { sheetWidth } = useResponsiveLayout();
   const route = useRoute<WordDetailRoute>();
   const word = route.params?.word ?? '';
   const source = route.params?.source ?? '';
@@ -91,7 +93,7 @@ export default function WordDetailModal() {
   return (
     <TouchableOpacity style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]} activeOpacity={1} onPress={() => navigation.goBack()}>
       {/* Absorb taps on the card itself so only backdrop taps dismiss the sheet */}
-      <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
+      <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[S.bgSurface2, { width: sheetWidth, alignSelf: 'center', borderTopLeftRadius: 24, borderTopRightRadius: 24 }, S.px5, { paddingTop: 20, paddingBottom: 32 }, { maxHeight: '70%' as any }]}>
         <View style={{ width: 36, height: 4, backgroundColor: C.text3, borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
         <View style={[S.flexRow, S.itemsCenter, S.gap1, S.mb1]}>
           <Search size={16} color={C.text} />

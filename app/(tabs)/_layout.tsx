@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProfileStore } from '../../stores/useProfileStore';
 import LevelOnboarding from '../onboarding/level';
+import { useResponsiveLayout } from '../../utils/responsive';
 import LibraryScreen from './library';
 import ListenScreen from './listen';
 import ProfileScreen from './profile';
@@ -20,6 +21,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { isTablet, width } = useResponsiveLayout();
   const levelOnboarded = useProfileStore((s) => s.settings.levelOnboarded);
   return (
     <View style={{ flex: 1 }}>
@@ -27,8 +29,13 @@ export default function TabLayout() {
       headerShown: false,
       tabBarActiveTintColor: '#7c5cfc',
       tabBarInactiveTintColor: '#a09db8',
-      tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e4e1f0', borderTopWidth: 1, paddingTop: 10, paddingBottom: (insets.bottom || 0) + 16, height: 60 + (insets.bottom || 0) },
-      tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
+      tabBarStyle: {
+        backgroundColor: '#ffffff', borderTopColor: '#e4e1f0', borderTopWidth: 1,
+        paddingTop: 10, paddingBottom: (insets.bottom || 0) + 16,
+        paddingHorizontal: isTablet ? Math.max(24, (width - 720) / 2) : 0,
+        height: 60 + (insets.bottom || 0),
+      },
+      tabBarLabelStyle: { fontSize: isTablet ? 12 : 11, fontWeight: '600' as const },
     }}>
       <Tab.Screen name="Speak" component={SpeakScreen} options={{ title: '口语', tabBarIcon: ({ color, size }) => <MessageCircle size={size ?? 24} color={color} /> }} />
       <Tab.Screen name="Listen" component={ListenScreen} options={{ title: '精听', tabBarIcon: ({ color, size }) => <Headphones size={size ?? 24} color={color} /> }} />

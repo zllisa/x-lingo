@@ -6,6 +6,7 @@ import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Word, GrammarLevel, GrammarEntry, GrammarPoint, GrammarTable } from '../../types';
 import { GRAMMAR_BOOK } from '../../constants/grammarBook';
 import { S, C } from '../../utils/theme';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 // 韩文音节的收音（终声）。用于把并入前字的词尾首字母一起高亮（-ㅂ니다 → 납니다）
 function finalCons(ch: string): string {
@@ -138,6 +139,7 @@ export default function LibraryScreen() {
   const [grammarSubTab, setGrammarSubTab] = useState<'saved' | 'book'>('book');
   const [unitsCollapsed, setUnitsCollapsed] = useState<Record<string, boolean>>({});
   const { width: winW } = useWindowDimensions();
+  const { isTablet, pagePadding } = useResponsiveLayout();
 
   const grouped = words.reduce((acc, w) => { const sec = w.section || 'other'; (acc[sec] = acc[sec] || []).push(w); return acc; }, {} as Record<string, Word[]>);
 
@@ -192,7 +194,7 @@ export default function LibraryScreen() {
     const rows = t.rows || [];
     const cols = t.headers?.length || rows[0]?.length || 1;
     // 固定列宽（标签列 60，其余 148）；若总宽能放进屏幕就弹性撑满，放不下才横向滚动
-    const fits = 60 + (cols - 1) * 148 <= winW - 64;
+    const fits = 60 + (cols - 1) * 148 <= Math.min(winW, 900) - (isTablet ? 72 : 64);
     const cw = (ci: number): any => (fits ? { flex: ci === 0 ? 1 : 2 } : { width: ci === 0 ? 60 : 148 });
     const leftB = { borderLeftWidth: 1, borderLeftColor: C.border };
     const bottomB = { borderBottomWidth: 1, borderBottomColor: C.border };
@@ -350,7 +352,7 @@ export default function LibraryScreen() {
   );
 
   return (
-    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, S.px4, S.pt4]}>
+    <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}><View style={[S.flex1, centeredContent(), { paddingHorizontal: pagePadding, paddingTop: isTablet ? 28 : 16 }]}>
       <View style={[S.row, S.bgSurface, S.border, S.roundedFull, { padding: 4 }, S.mb3]}>
         {([
           { key: 'words',     Icon: BookOpen,      label: '生词本' },

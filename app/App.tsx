@@ -80,7 +80,8 @@ export default function App() {
               <Stack.Screen name="Chat" component={ChatScreen} options={{ gestureEnabled: false }} />
               <Stack.Screen name="TaskIntro" component={TaskIntroScreen} />
               <Stack.Screen name="Conversations" component={ConversationsScreen} />
-              <Stack.Screen name="Player" component={PlayerScreen} />
+              {/* 播放器底部有横向进度拖动；关闭原生侧滑返回，返回仍使用页头按钮。 */}
+              <Stack.Screen name="Player" component={PlayerScreen} options={{ gestureEnabled: false }} />
               <Stack.Screen name="Calendar" component={CalendarScreen} />
               <Stack.Screen name="WordDetail" component={WordDetailModal} options={{ presentation: 'transparentModal' }} />
               <Stack.Screen name="SentenceDetail" component={SentenceDetailModal} options={{ presentation: 'transparentModal' }} />

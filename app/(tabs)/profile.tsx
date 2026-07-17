@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { GraduationCap, Pencil, FileText, Settings, Dices, UserPen, X, Crown, ArrowRight } from 'lucide-react-native';
 import { S, C } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 const SUPERLATIVES = ['努力', '勤奋', '可爱', '元气', '认真', '温柔', '帅气', '聪明', '热情', '耐心', '刻苦', '自信', '执着', '励志', '自律'];
 const NOUNS = ['韩语达人', '学习家', '追梦人', '练习生', '留学党', '韩剧迷', 'K-pop粉', '语言控', '口语王', '字幕君', '文化通', '小能手', '小天才', '探索者', '旅行家'];
@@ -43,6 +44,7 @@ function calcStreak(dates: string[]): number {
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const { isTablet, pagePadding, formMaxWidth } = useResponsiveLayout();
   const { profile, checkinDates, todayStudyMinutes, canCheckinToday, toggleTodayCheckin, settings, updateSettings, setProfile } = useProfileStore();
   const { isLoggedIn, email, logout } = useAuthStore();
   const chatHistory = useSpeakStore(s => s.chatHistory);
@@ -81,7 +83,10 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
-      <ScrollView style={[S.flex1, S.bg]} contentContainerStyle={[S.px4, S.pt4, { paddingBottom: 32 }]}>
+      <ScrollView
+        style={[S.flex1, S.bg]}
+        contentContainerStyle={[centeredContent(860), { paddingHorizontal: pagePadding, paddingTop: isTablet ? 28 : 16, paddingBottom: 32 }]}
+      >
 
         {/* ── Profile header ── */}
         <View style={[S.flexRow, S.itemsCenter, { gap: 14, marginBottom: 18 }]}>
@@ -153,9 +158,9 @@ export default function ProfileScreen() {
             <View>
               <View style={[S.flexRow, S.itemsCenter, { gap: 7 }]}>
                 <FileText size={17} color={C.accent} />
-                <Text style={[{ fontSize: 16 }, S.bold, S.textAccent]}>今日已达 10 分钟</Text>
+                <Text style={[{ fontSize: 16 }, S.bold, S.textAccent]}>今日学习 {todayStudyMinutes} 分钟</Text>
               </View>
-              <Text style={[{ fontSize: 14 }, S.text3, { marginTop: 6 }]}>已学 {todayStudyMinutes} 分钟，点击打卡</Text>
+              <Text style={[{ fontSize: 14 }, S.text3, { marginTop: 6 }]}>已达到 10 分钟，点击完成今日打卡</Text>
             </View>
             <View style={[S.bgAccent, S.roundedFull, { paddingHorizontal: 16, paddingVertical: 8 }]}>
               <Text style={[S.textWhite, S.semibold, { fontSize: 14 }]}>打卡</Text>
@@ -165,9 +170,9 @@ export default function ProfileScreen() {
           <View style={[S.bgAccent5, { borderWidth: 1, borderColor: 'rgba(124,92,252,0.2)', borderRadius: 12, padding: 14, paddingHorizontal: 16, marginBottom: 14 }]}>
             <View style={[S.flexRow, S.itemsCenter, { gap: 7 }]}>
               <FileText size={17} color={C.accent} />
-              <Text style={[{ fontSize: 16 }, S.bold, S.textAccent]}>今日学习</Text>
+              <Text style={[{ fontSize: 16 }, S.bold, S.textAccent]}>今日学习 {todayStudyMinutes} 分钟</Text>
             </View>
-            <Text style={[{ fontSize: 14 }, S.text3, { marginTop: 6 }]}>已学 {todayStudyMinutes} 分钟，满 10 分钟可打卡</Text>
+            <Text style={[{ fontSize: 14 }, S.text3, { marginTop: 6 }]}>满 10 分钟即可完成今日打卡</Text>
           </View>
         )}
 
@@ -225,7 +230,7 @@ export default function ProfileScreen() {
       {/* ── Nickname Edit Modal ── */}
       <Modal visible={editNickname} transparent animationType="fade">
         <View style={[S.flex1, S.center, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[S.bgSurface, S.roundedCard, { width: '80%' }, S.p5]}>
+          <View style={[S.bgSurface, S.roundedCard, { width: '80%', maxWidth: formMaxWidth }, S.p5]}>
             <Text style={[{ fontSize: 18 }, S.bold, S.text, S.mb3]}>修改昵称</Text>
             <TextInput
               style={[S.bgSurface2, S.border, S.roundedSM, S.px4, S.py3, { fontSize: 16 }, S.text, S.mb3]}
@@ -254,7 +259,7 @@ export default function ProfileScreen() {
       {/* ── Nickname Picker Modal ── */}
       <Modal visible={showPicker} transparent animationType="slide">
         <View style={[S.flex1, { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[S.bgSurface2, { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '60%' as any }]}>
+          <View style={[S.bgSurface2, centeredContent(isTablet ? 640 : 10000), { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '60%' as any }]}>
             <View style={[S.spaceBetween, S.px5, { paddingTop: 20, paddingBottom: 12 }]}>
               <View style={[S.flexRow, S.itemsCenter, { gap: 4 }]}>
                 <UserPen size={20} color={C.text} />

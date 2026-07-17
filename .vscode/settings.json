@@ -1,0 +1,5 @@
+{
+  "deno.path": "/opt/homebrew/bin/deno",
+  "deno.enablePaths": ["./supabase/functions"],
+  "deno.importMap": "./supabase/functions/deno.json"
+}

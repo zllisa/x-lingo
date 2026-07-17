@@ -6,11 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<Nav>();
+  const { formMaxWidth } = useResponsiveLayout();
   const { login, register } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +45,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={[S.flex1, S.bg]} edges={['top']}>
       <KeyboardAvoidingView style={S.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[S.flex1, S.center, S.px5]}>
+        <View style={[S.flex1, S.center, centeredContent(formMaxWidth), S.px5]}>
           <View style={{ marginBottom: 18, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 }}>
             <Image source={require('../../assets/icon.png')} style={{ width: 76, height: 76, borderRadius: 18 }} />
           </View>

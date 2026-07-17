@@ -56,6 +56,8 @@ export interface Conversation {
 export interface AudioFile {
   id: string;
   name: string;
+  // User-facing grouping for filtering in the listening library.
+  category?: string;
   duration: string;
   date: string;
   icon: string;
@@ -66,8 +68,8 @@ export interface AudioFile {
   // this path directly — no Qiniu download needed at play time.
   localAudioUri?: string;
   transcodeId?: string;
-  // 上传到七牛的原始视频 key（lisa/{userId}/video_*.mp4）。转码出 WAV 后即可删除以省存储；
-  // 删除后清空。仅在「已上传视频、尚未删源视频」的窗口内有值。
+  // 上传到七牛的源文件 key（iOS 为本地提取后的 m4a，其他平台可能为视频）。
+  // 转码出 WAV 后即可删除以省存储；删除后清空。
   videoKey?: string;
 }
 

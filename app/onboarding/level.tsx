@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { SpeakLevel } from '../../types';
 import { C, S } from '../../utils/theme';
+import { centeredContent } from '../../utils/responsive';
 
 // ── Step 1: Language ──────────────────────────────────────────────
 const LANGUAGES = [
@@ -58,6 +59,7 @@ export default function LevelOnboarding() {
       paddingHorizontal: 24,
       paddingBottom: insets.bottom + 24,
     }]}>
+      <View style={[S.flex1, centeredContent(560)]}>
 
       {/* Step dots — always centered */}
       <StepDots current={step} total={2} />
@@ -155,6 +157,7 @@ export default function LevelOnboarding() {
           </TouchableOpacity>
         </View>
       )}
+      </View>
     </View>
   );
 }

@@ -17,6 +17,7 @@ import { ChatMessage } from '../../types';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
 import SpeakerIcon from '../components/SpeakerIcon';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -52,6 +53,7 @@ function Waveform({ color, bars = 22 }: { color: string; bars?: number }) {
 export default function ChatScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { isTablet, pagePadding } = useResponsiveLayout();
   const { chatHistory, addMessage, voiceState, setVoiceState, setVoiceDraftText, resetVoice, completedTaskIds, toggleTask, activeScenario, setCompletedTasks } = useSpeakStore();
   const [showTasks, setShowTasks] = useState(true);
   const [recSeconds, setRecSeconds] = useState(0);
@@ -382,7 +384,7 @@ export default function ChatScreen() {
   return (
     <View style={S.flex1}>
         {/* Header */}
-        <View style={[{ paddingTop: insets.top + 8, paddingBottom: 8 }, S.px4, S.bgSurface, S.borderBottom, S.flexRow, S.spaceBetween]}>
+        <View style={[centeredContent(), { paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: pagePadding }, S.bgSurface, S.borderBottom, S.flexRow, S.spaceBetween]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[S.flexRow]}><ChevronLeft size={18} color={C.accent} /><Text style={[S.textSm, S.textAccent, S.semibold]}>返回</Text></TouchableOpacity>
           <View style={[S.flexRow, S.itemsCenter, S.gap1, { flex: 1, justifyContent: 'center' }]}>
             {activeScenario ? <Theater size={15} color={C.text2} /> : null}
@@ -400,7 +402,7 @@ export default function ChatScreen() {
 
         {/* Scenario task checklist */}
         {activeScenario ? (
-          <View style={[S.bgSurface, { borderBottomWidth: 1, borderBottomColor: C.border, paddingHorizontal: 16, paddingVertical: 8 }]}>
+          <View style={[S.bgSurface, centeredContent(), { borderBottomWidth: 1, borderBottomColor: C.border, paddingHorizontal: pagePadding, paddingVertical: 8 }]}>
             <TouchableOpacity style={[S.flexRow, S.itemsCenter, S.spaceBetween]} onPress={() => setShowTasks(v => !v)}>
               <Text style={[S.textXs, S.semibold, S.text2]}>
                 任务进度 {completedTaskIds.length}/{activeScenario.tasks.length}
@@ -426,7 +428,7 @@ export default function ChatScreen() {
         ) : null}
 
         {/* Messages */}
-        <FlatList ref={flatListRef} style={[S.flex1, { paddingHorizontal: 16, paddingTop: 12 }]} data={chatHistory} keyExtractor={item => item.id}
+        <FlatList ref={flatListRef} style={S.flex1} contentContainerStyle={[centeredContent(900), { paddingHorizontal: pagePadding, paddingTop: isTablet ? 20 : 12 }]} data={chatHistory} keyExtractor={item => item.id}
           renderItem={({ item }) =>
             item.type === 'user' ? (
               <UserMessage item={item} renderText={renderText} onSentencePress={handleSentencePress} context={activeScenario?.title} />
@@ -438,7 +440,7 @@ export default function ChatScreen() {
         />
 
         {/* 底部入口：按住说话（手势起点，全程 PanResponder 在这里） */}
-        <View style={[S.bgSurface, { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: 20, paddingTop: 14, paddingBottom: insets.bottom + 14 }]}>
+        <View style={[S.bgSurface, centeredContent(), { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: isTablet ? 32 : 20, paddingTop: 14, paddingBottom: insets.bottom + 14 }]}>
           <View {...panHandlers.panHandlers} style={[S.itemsCenter, { paddingVertical: 6 }]}>
             <View style={[S.w14, S.roundedFull, S.bgAccent, S.center, S.shadow]}>
               <Mic size={26} color="#fff" />

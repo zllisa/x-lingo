@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 
+const LAST_LISTEN_STUDY_ID = '__last_listen_study__';
+
 // ─── Checkin Sync ───────────────────────────────────────────
 export async function syncCheckinsToCloud(userId: string, checkinDates: string[]) {
   const { data: existing } = await supabase.from('checkins').select('checkin_date').eq('user_id', userId);
@@ -82,8 +84,41 @@ export async function deleteListenFileFromCloud(userId: string, fileId: string) 
 export async function loadListenFilesFromCloud(userId: string): Promise<any[]> {
   const { data } = await supabase
     .from('listen_files').select('file_data').eq('user_id', userId)
+    .neq('file_id', LAST_LISTEN_STUDY_ID)
     .order('updated_at', { ascending: false });
   return (data || []).map((r: any) => r.file_data);
+}
+
+// 最近一次精听状态复用 listen_files 的 JSONB 行，避免为了单条用户状态新增表。
+// file_id 使用保留值，并在普通素材查询中排除。
+export async function syncLastListenStudyToCloud(userId: string, lastStudy: any) {
+  await supabase.from('listen_files').upsert(
+    {
+      user_id: userId,
+      file_id: LAST_LISTEN_STUDY_ID,
+      file_data: { lastStudy },
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,file_id' },
+  );
+}
+
+export async function loadLastListenStudyFromCloud(userId: string): Promise<any | null> {
+  const { data } = await supabase
+    .from('listen_files')
+    .select('file_data')
+    .eq('user_id', userId)
+    .eq('file_id', LAST_LISTEN_STUDY_ID)
+    .maybeSingle();
+  return data?.file_data?.lastStudy || null;
+}
+
+export async function deleteLastListenStudyFromCloud(userId: string) {
+  await supabase
+    .from('listen_files')
+    .delete()
+    .eq('user_id', userId)
+    .eq('file_id', LAST_LISTEN_STUDY_ID);
 }
 
 // ─── Conversations (口语) Sync ───────────────────────────────
