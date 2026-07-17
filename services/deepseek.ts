@@ -366,26 +366,26 @@ JSON format:
 {
   "words": [{"word": "주말", "meaning": "周末"}, ...],
   "grammar": [
-    {"text": "-을 거예요: 表示将来计划", "level": "beginner"},
-    {"text": "뭐: 무엇 的口语缩写", "level": "beginner"},
-    {"text": "해요체: 尊敬阶", "level": "beginner"}
+    {"text": "-을 거예요", "level": "beginner", "detail": "接在动词词干后，表示说话人的未来计划或较确定的意图；有收音用 -을 거예요，无收音用 -ㄹ 거예요。说明本句中的具体接法、语气以及容易混淆的表达。", "examples": ["내일 공부할 거예요.（明天打算学习。）"]}
   ],
   "why": "为什么母语者会这样表达：语气/语感/选这个说法而不是别的说法的原因，用中文，1-3句",
   "chunks": [{"chunk": "-는 게 좋다", "meaning": "最好…（固定搭配，表建议）"}],
   "contractions": [{"form": "뭐", "full": "무엇", "meaning": "什么"}, {"form": "건", "full": "것은", "meaning": "…这个东西（主题）"}],
   "examples": ["내일 뭐 할 거예요? (明天干什么？)", "주말에 어디 갈 거예요? (周末去哪儿？)"],
-  "usage": "用于询问对方的周末计划，朋友/熟人之间常用"
+  "usage": "用于询问对方的周末计划，朋友/熟人之间常用",
+  "tables": [{"title": "-을/ㄹ 거예요 接续", "headers": ["词干", "规则", "示例"], "rows": [["有收音", "-을 거예요", "먹다 → 먹을 거예요"], ["无收音", "-ㄹ 거예요", "가다 → 갈 거예요"]]}]
 }
 
 Rules:
 - 只讲对学习者真正有帮助、容易误解的内容；不要为了填满栏目重复同一解释。
 - "words": 只列关键词或不容易从整句译文看出的词，不要逐字复述整句翻译。
-- "grammar": 只解释真正出现的关键语法。不要把词义、缩写还原和普通语体标签重复放进 grammar。每项分配 "level": "beginner" (TOPIK 1-2), "intermediate" (TOPIK 3-4), or "advanced" (TOPIK 5-6).
+- "grammar": 只解释真正出现的关键语法。每项必须包含简洁的语法名称 text、难度 level、详细说明 detail 和 1-2 个 examples。detail 要讲清接续规则、本句中的实际形式、语气/含义、易错点或相近语法区别，不要只写一句词义。不要把词义、缩写还原和普通语体标签重复放进 grammar。level 为 "beginner" (TOPIK 1-2)、"intermediate" (TOPIK 3-4) 或 "advanced" (TOPIK 5-6)。
 - "why": 只解释语气、语感或母语者选择这个说法的原因，不再复述 grammar 和整句翻译。1-2句。
 - "chunks": 句子里的「词块 / 固定搭配 / 惯用组合」，不是逐词，而是常一起出现、要整体记的组合。没有就返回 []。
 - "contractions": 句子里出现的「口语缩写 / 缩略形式」，还原成完整原型。例如 뭐→무엇、건→것은、해야지→해야 하지、난→나는。没有就返回 []。
 - "examples": 最多 2 个真正有助于迁移的相似句；没有必要时返回 []。
 - "usage": 只补充前面未提到的使用场景、礼貌程度或替代表达；没有新信息时返回空字符串。
+- "tables": 仅当内容确实适合行列对比时使用，例如接续规则、动词变形、敬语层级或相近语法区别；表头和单元格都必须是短文本。没有适合的表格就返回 []，不要为了展示表格而重复正文。
 - If there are English loanwords, note them.`;
 
 const EXPLAIN_FOLLOW_UP_PROMPT = `你是一名简洁、可靠的韩语老师。用户正在围绕一条或连续多条韩语字幕提问。多条字幕可能只是同一个完整句子被切开的片段，应先结合全部上下文还原整体意思，不要孤立理解其中某一条。
@@ -468,6 +468,8 @@ export async function deepSeekExplain(text: string): Promise<ExplainData> {
     const grammar = Array.isArray(raw.grammar) ? raw.grammar.map((g: any) => ({
       text: typeof g === 'string' ? g : typeof g?.text === 'string' ? g.text : String(g?.text ?? ''),
       level: ['beginner', 'intermediate', 'advanced'].includes(g?.level) ? g.level : 'beginner' as const,
+      detail: typeof g?.detail === 'string' ? g.detail : '',
+      examples: Array.isArray(g?.examples) ? g.examples.map((e: any) => String(e)).slice(0, 2) : [],
     })) : [];
     const examples = Array.isArray(raw.examples) ? raw.examples.map((e: any) => String(e)) : [];
     const usage = typeof raw?.usage === 'string' ? raw.usage : String(raw?.usage ?? '');
@@ -481,7 +483,14 @@ export async function deepSeekExplain(text: string): Promise<ExplainData> {
       full: typeof c?.full === 'string' ? c.full : String(c?.full ?? ''),
       meaning: typeof c?.meaning === 'string' ? c.meaning : String(c?.meaning ?? ''),
     })).filter((c: any) => c.form) : [];
-    return { words, grammar, examples, usage, why, chunks, contractions };
+    const tables = Array.isArray(raw.tables) ? raw.tables.map((t: any) => ({
+      title: typeof t?.title === 'string' ? t.title : '',
+      headers: Array.isArray(t?.headers) ? t.headers.map((h: any) => String(h)).slice(0, 5) : [],
+      rows: Array.isArray(t?.rows) ? t.rows.slice(0, 8).map((row: any) =>
+        Array.isArray(row) ? row.map((cell: any) => String(cell)).slice(0, 5) : [],
+      ) : [],
+    })).filter((t: any) => t.headers.length && t.rows.length) : [];
+    return { words, grammar, examples, usage, why, chunks, contractions, tables };
   }
 
   try {

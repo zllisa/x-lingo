@@ -92,6 +92,14 @@ export type GrammarLevel = 'beginner' | 'intermediate' | 'advanced';
 export interface GrammarExplainItem {
   text: string;
   level: GrammarLevel;
+  detail?: string;
+  examples?: string[];
+}
+
+export interface ExplainTable {
+  title: string;
+  headers: string[];
+  rows: string[][];
 }
 
 export interface ExplainData {
@@ -105,6 +113,8 @@ export interface ExplainData {
   chunks?: { chunk: string; meaning: string }[];
   // 口语缩写 / 缩略 → 还原成原型（如 뭐→무엇、건→것은、해야지→해야 하지）
   contractions?: { form: string; full: string; meaning: string }[];
+  // 适合对比、变形或结构归纳的内容，用表格展示。旧缓存可缺省。
+  tables?: ExplainTable[];
 }
 
 export interface Word {
@@ -139,6 +149,8 @@ export interface GrammarPoint {
   level: GrammarLevel;  // 初级/中级/高级
   source: string;       // 来源（如 "AI 精听讲解 · coffee_menu"）
   savedAt: number;
+  detail?: string;
+  examples?: string[];
 }
 
 // === 语法书（教材导入）===

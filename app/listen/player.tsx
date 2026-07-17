@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  AudioLines, BookOpen, CheckCircle2, ChevronLeft, Lightbulb,
+  AudioLines, BookOpen, Check, CheckCircle2, ChevronLeft, Copy, Lightbulb,
   MessageCircle, Mic, MoreHorizontal, Pause, Play, Puzzle, Repeat, Scissors, SkipBack,
   SkipForward, Sparkles, Star, Type, Volume2, X,
 } from 'lucide-react-native';
@@ -207,6 +207,10 @@ export default function PlayerScreen() {
   const [explainIdx, setExplainIdx] = useState(0);
   const [explainIndices, setExplainIndices] = useState<number[]>([0]);
   const [multiExplain, setMultiExplain] = useState<TranscriptItem['explain']>();
+  const [explainPlaying, setExplainPlaying] = useState(false);
+  const explainPlaybackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const explainPlaybackTokenRef = useRef(0);
+  const stopExplainPlaybackRef = useRef<() => void>(() => {});
   const explainFromEchoRef = useRef(false);
   const pendingExplainIdxRef = useRef<number | null>(null);
   const [explaining, setExplaining] = useState(false);
@@ -226,6 +230,7 @@ export default function PlayerScreen() {
       repeatCycleTokenRef.current += 1;
       repeatTransitionRef.current = false;
       stopEchoRef.current();
+      stopExplainPlaybackRef.current();
       // Pause playback when leaving the screen
       pause(MAIN_ID).catch(() => {});
       setPlaying(false);
@@ -260,7 +265,7 @@ export default function PlayerScreen() {
               const cycleToken = ++repeatCycleTokenRef.current;
               await pause(MAIN_ID).catch(() => {});
               // 每遍之间留出短暂回想/呼吸时间，避免机械地无缝连读。
-              await new Promise(resolve => setTimeout(resolve, 2300));
+              await new Promise(resolve => setTimeout(resolve, 1000));
               if (cycleToken !== repeatCycleTokenRef.current || repeatTimesRef.current <= 1) {
                 repeatTransitionRef.current = false;
                 return;
@@ -607,6 +612,16 @@ export default function PlayerScreen() {
     onRowPress(index);
   }, [onRowPress, selectedSubtitleIndices.length, toggleSubtitleSelection]);
 
+  const handleSubtitleWordPress = useCallback((index: number, word: string) => {
+    if (selectedSubtitleIndices.length) {
+      toggleSubtitleSelection(index);
+      return;
+    }
+    const clean = word.replace(/[^가-힣a-zA-Z]/g, '');
+    if (!clean) return;
+    navigation.navigate('WordDetail', { word: clean, source: '精听跟读' });
+  }, [navigation, selectedSubtitleIndices.length, toggleSubtitleSelection]);
+
   const renderTranscriptRow = useCallback(
     ({ item, index }: { item: TranscriptItem; index: number }) => (
       <TranscriptRow
@@ -620,9 +635,10 @@ export default function PlayerScreen() {
         selectionMode={selectionMode}
         onPress={handleSubtitlePress}
         onLongPress={toggleSubtitleSelection}
+        onWordPress={handleSubtitleWordPress}
       />
     ),
-    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection],
+    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection, handleSubtitleWordPress],
   );
 
   const toggleRomajaStable = () => {
@@ -887,7 +903,7 @@ export default function PlayerScreen() {
     // 麦克风预授权会把 iOS AVAudioSession 切到录音模式；重新加载原声播放器，
     // 确保第一阶段不是“进度在走但没有声音”。
     try {
-      await loadMain();
+      if (!playableUriRef.current) await loadMain();
       await setRate(MAIN_ID, rateRef.current);
     } catch (error: any) {
       Alert.alert('原声加载失败', error?.message || '无法播放当前句');
@@ -953,7 +969,7 @@ export default function PlayerScreen() {
       return;
     }
     try {
-      await loadMain();
+      if (!playableUriRef.current) await loadMain();
       await setRate(MAIN_ID, rateRef.current);
       echoPreviewRef.current = true;
       playEchoPreview(echoIdx).catch(() => {});
@@ -980,6 +996,66 @@ export default function PlayerScreen() {
     playEchoCycle(echoIdx, token).catch(() => {});
   };
 
+  const stopExplainPlayback = async () => {
+    explainPlaybackTokenRef.current += 1;
+    if (explainPlaybackTimerRef.current) {
+      clearTimeout(explainPlaybackTimerRef.current);
+      explainPlaybackTimerRef.current = null;
+    }
+    await pause(MAIN_ID).catch(() => {});
+    setExplainPlaying(false);
+    setPlaying(false);
+  };
+  stopExplainPlaybackRef.current = () => { stopExplainPlayback().catch(() => {}); };
+
+  const playExplainSelection = async (rawIndices: number[]) => {
+    const indices = [...rawIndices].sort((a, b) => a - b);
+    const firstIndex = indices[0];
+    const lastIndex = indices[indices.length - 1];
+    const firstItem = items[firstIndex];
+    const lastItem = items[lastIndex];
+    if (!firstItem || !lastItem) return;
+
+    const token = ++explainPlaybackTokenRef.current;
+    if (explainPlaybackTimerRef.current) clearTimeout(explainPlaybackTimerRef.current);
+    explainPlaybackTimerRef.current = null;
+    repeatCycleTokenRef.current += 1;
+    repeatTransitionRef.current = false;
+    await pause(MAIN_ID).catch(() => {});
+    setPlaying(false);
+    setExplainPlaying(true);
+
+    try {
+      if (!playableUriRef.current) await loadMain();
+      if (token !== explainPlaybackTokenRef.current) return;
+      await setRate(MAIN_ID, rateRef.current);
+      let fallbackSec = durationMs / 1000;
+      if (fallbackSec <= itemStartSec(lastItem)) {
+        fallbackSec = (await getStatus(MAIN_ID)).duration / 1000;
+      }
+      const startMs = itemStartSec(firstItem) * 1000;
+      const endMs = itemEndSec(lastItem, items[lastIndex + 1], fallbackSec) * 1000;
+      const playMs = Math.max((endMs - startMs) / (rateRef.current || 1), 300);
+      await seek(MAIN_ID, startMs);
+      if (token !== explainPlaybackTokenRef.current) return;
+      await play(MAIN_ID);
+      if (token !== explainPlaybackTokenRef.current) {
+        await pause(MAIN_ID).catch(() => {});
+        return;
+      }
+      explainPlaybackTimerRef.current = setTimeout(() => {
+        if (token !== explainPlaybackTokenRef.current) return;
+        explainPlaybackTimerRef.current = null;
+        pause(MAIN_ID).catch(() => {});
+        setExplainPlaying(false);
+        setPlaying(false);
+      }, playMs);
+    } catch (error: any) {
+      setExplainPlaying(false);
+      Alert.alert('播放失败', error?.message || '无法播放所选字幕');
+    }
+  };
+
   const presentPendingExplain = () => {
     const index = pendingExplainIdxRef.current;
     if (index == null) return;
@@ -988,6 +1064,7 @@ export default function PlayerScreen() {
     setExplainIndices([index]);
     setMultiExplain(undefined);
     setExplainVisible(true);
+    playExplainSelection([index]).catch(() => {});
   };
 
   const openExplain = async (index: number) => {
@@ -1008,6 +1085,7 @@ export default function PlayerScreen() {
     setExplainIndices([index]);
     setMultiExplain(undefined);
     setExplainVisible(true);
+    playExplainSelection([index]).catch(() => {});
   };
 
   const openSelectedExplain = () => {
@@ -1018,9 +1096,26 @@ export default function PlayerScreen() {
     setMultiExplain(undefined);
     setSelectedSubtitleIndices([]);
     setExplainVisible(true);
+    playExplainSelection(indices).catch(() => {});
+  };
+
+  const copySelectedSubtitles = () => {
+    const text = [...selectedSubtitleIndices]
+      .sort((a, b) => a - b)
+      .map(index => items[index]?.ko)
+      .filter(Boolean)
+      .join('\n');
+    if (!text) return;
+    try {
+      require('react-native/Libraries/Components/Clipboard/Clipboard').default.setString(text);
+      Alert.alert('已复制', `已复制 ${selectedSubtitleIndices.length} 句字幕。`);
+    } catch {
+      Alert.alert('复制失败', '暂时无法访问剪贴板，请稍后再试。');
+    }
   };
 
   const closeExplain = () => {
+    stopExplainPlaybackRef.current();
     setExplainVisible(false);
     if (!explainFromEchoRef.current) return;
     explainFromEchoRef.current = false;
@@ -1233,6 +1328,14 @@ export default function PlayerScreen() {
               <Text style={[S.textSm, S.text, S.semibold]}>已选 {selectedSubtitleIndices.length} 句</Text>
               <Text style={[S.textXxs, S.text3, { marginTop: 2 }]}>点击字幕继续选择</Text>
             </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`复制已选择的 ${selectedSubtitleIndices.length} 句字幕`}
+              onPress={copySelectedSubtitles}
+              style={[S.center, S.roundedFull, S.bgSurface2, { width: 44, height: 44 }]}
+            >
+              <Copy size={18} color={C.accent} />
+            </TouchableOpacity>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={`询问 AI，已选择 ${selectedSubtitleIndices.length} 句字幕`}
@@ -1627,6 +1730,10 @@ export default function PlayerScreen() {
         translation={(explainIndices.length ? explainIndices : [explainIdx]).map(index => items[index]?.zh).filter(Boolean).join('\n')}
         explain={explainIndices.length > 1 ? multiExplain : items[explainIdx]?.explain}
         sentenceCount={explainIndices.length}
+        sourcePlaying={explainPlaying}
+        onToggleSourcePlayback={() => explainPlaying
+          ? stopExplainPlaybackRef.current()
+          : playExplainSelection(explainIndices.length ? explainIndices : [explainIdx]).catch(() => {})}
         explaining={explaining}
         onRequestExplain={ensureExplain}
         onClose={closeExplain}
@@ -1868,9 +1975,10 @@ interface TranscriptRowProps {
   selectionMode: boolean;
   onPress: (index: number) => void;
   onLongPress: (index: number) => void;
+  onWordPress: (index: number, word: string) => void;
 }
 const TranscriptRow = memo(function TranscriptRow({
-  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress,
+  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress, onWordPress,
 }: TranscriptRowProps) {
   const words = useMemo(() => romanizeWords(item.ko), [item.ko]);
   const longPressedRef = useRef(false);
@@ -1902,8 +2010,10 @@ const TranscriptRow = memo(function TranscriptRow({
     >
       <View style={[S.flexRow, S.itemsCenter, S.mb1, { gap: 8 }]}>
         {selectionMode ? (
-          <View style={[S.center, S.roundedFull, { width: 21, height: 21, borderWidth: 1.5, borderColor: selected ? C.accent : C.border, backgroundColor: selected ? C.accent : C.surface }]}>
-            {selected ? <CheckCircle2 size={15} color="#fff" /> : null}
+          <View style={[S.center, S.roundedFull, { width: 21, height: 21 }, selected
+            ? { backgroundColor: C.accent }
+            : { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border }]}>
+            {selected ? <Check size={15} color="#fff" strokeWidth={3} /> : null}
           </View>
         ) : null}
         <Text style={[S.textXs, S.text3]}>{item.time}</Text>
@@ -1912,7 +2022,14 @@ const TranscriptRow = memo(function TranscriptRow({
         {words.map((p, wi) => {
           const isReading = isActive && wi === readingIdx;
           return (
-            <View key={wi} style={{ marginRight: 14, marginBottom: 6, alignItems: 'flex-start' }}>
+            <TouchableOpacity
+              key={wi}
+              activeOpacity={0.65}
+              onPress={() => onWordPress(index, p.ko)}
+              accessibilityRole="button"
+              accessibilityLabel={selectionMode ? `选择第 ${index + 1} 句字幕` : `查看 ${p.ko} 的意思和发音`}
+              style={{ marginRight: 14, marginBottom: 6, alignItems: 'flex-start' }}
+            >
               {/* 边框只包韩文，不含罗马音；不改背景。边框常驻（非高亮时透明），
                   避免高亮切换时布局跳动。 */}
               <View style={{
@@ -1933,7 +2050,7 @@ const TranscriptRow = memo(function TranscriptRow({
               {showRomaja ? (
                 <Text style={[S.textXxs, { color: C.accent, marginTop: 1, letterSpacing: 0.3 }]}>{p.roma}</Text>
               ) : null}
-            </View>
+            </TouchableOpacity>
           );
         })}
       </View>

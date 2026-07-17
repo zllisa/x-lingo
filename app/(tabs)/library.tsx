@@ -572,6 +572,22 @@ export default function LibraryScreen() {
                   <Text style={[S.textBase, S.text, S.bold, { lineHeight: 28 }]}>{selectedGrammar.ko}</Text>
                 </View>
 
+                {selectedGrammar.detail ? (
+                  <View style={[S.bgSurface, S.border, S.roundedSM, S.p4, S.mb3]}>
+                    <Text style={[S.textXs, S.textAccent, S.semibold, S.mb2]}>详细说明</Text>
+                    <Text style={[S.textSm, S.text2, { lineHeight: 24 }]}>{selectedGrammar.detail}</Text>
+                  </View>
+                ) : null}
+
+                {selectedGrammar.examples?.length ? (
+                  <View style={[S.bgSurface, S.border, S.roundedSM, S.p4, S.mb3]}>
+                    <Text style={[S.textXs, S.textAccent, S.semibold, S.mb2]}>例句</Text>
+                    {selectedGrammar.examples.map((example, index) => (
+                      <Text key={index} style={[S.textSm, S.text, { lineHeight: 24 }, index > 0 && S.mt1]}>• {example}</Text>
+                    ))}
+                  </View>
+                ) : null}
+
                 {/* Level */}
                 <View style={[S.row, S.gap2, S.itemsCenter, S.mb3]}>
                   <Text style={[S.textSm, S.text2]}>难度等级：</Text>
