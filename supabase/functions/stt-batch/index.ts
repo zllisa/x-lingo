@@ -77,6 +77,13 @@ async function createAzureJob(audioUrl: string): Promise<string> {
         wordLevelTimestampsEnabled: true,
         punctuationMode: 'DictatedAndAutomatic',
         profanityFilterMode: 'None',
+        // Korean remains the fallback because x-lingo is Korean-first, while
+        // language identification prevents English/Japanese/Chinese clips (or
+        // longer code-switched passages) from being forced through ko-KR.
+        languageIdentification: {
+          mode: 'Single',
+          candidateLocales: ['ko-KR', 'en-US', 'ja-JP', 'zh-CN'],
+        },
       },
     }),
   });

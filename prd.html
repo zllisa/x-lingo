@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>韩语学习 App V1.0 — 完整需求说明书</title>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --surface: #1a1a24;
+    --surface2: #222230;
+    --border: #2a2a3a;
+    --text: #e0e0ec;
+    --text2: #a0a0b8;
+    --text3: #6a6a80;
+    --accent: #7c5cfc;
+    --accent2: #5b8def;
+    --accent3: #4ecdc4;
+    --red: #ff6b6b;
+    --orange: #ffa94d;
+    --green: #51cf66;
+    --tag-bg: rgba(124,92,252,0.12);
+    --tag-text: #b39dfc;
+    --code-bg: rgba(255,255,255,0.04);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 2px 12px rgba(0,0,0,.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Noto Sans KR", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* Header */
+  .hero {
+    text-align: center;
+    padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .hero .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -.3px;
+    margin-bottom: 8px;
+  }
+  .hero .sub {
+    color: var(--text2);
+    font-size: 15px;
+  }
+
+  /* Section headings */
+  .section { margin-bottom: 48px; }
+  .sec-num {
+    display: inline-block;
+    width: 32px; height: 32px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 8px;
+    text-align: center;
+    line-height: 32px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  .sec-title {
+    font-size: 22px;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .sec-desc {
+    color: var(--text2);
+    margin: 6px 0 16px 44px;
+    font-size: 14px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-header {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-header .icon { font-size: 18px; }
+  .card p, .card li { color: var(--text2); font-size: 14px; }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 2px 4px 2px 0;
+  }
+  .tag.red  { background: rgba(255,107,107,.12);  color: #ff8787; }
+  .tag.green{ background: rgba(81,207,102,.12);  color: #69db7c; }
+  .tag.blue { background: rgba(91,141,239,.12);  color: #74b9ff; }
+  .tag.orange{background: rgba(255,169,77,.12);  color: #ffc078; }
+
+  /* Feature grid */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) {
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 24px; }
+  }
+
+  /* Scenario blocks */
+  .scenario {
+    border-left: 3px solid var(--accent);
+    background: var(--surface2);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px;
+    margin: 12px 0;
+  }
+  .scenario .label {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent2);
+    margin-bottom: 4px;
+  }
+  .scenario .label.A { color: var(--green); }
+  .scenario .label.B { color: var(--accent2); }
+  .scenario .label.C { color: var(--orange); }
+
+  /* Korean text */
+  .ko { font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; color: #e8e8f0; }
+
+  /* Red line */
+  .redline {
+    background: rgba(255,107,107,.06);
+    border: 1px solid rgba(255,107,107,.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .redline::before { content: "🚫 强制红线："; font-weight: 700; color: var(--red); }
+
+  /* Quote / example */
+  .example {
+    background: var(--code-bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 13px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    color: var(--text3);
+  }
+
+  /* Table of modules */
+  .modules-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 700px) { .modules-overview { grid-template-columns: 1fr 1fr; } }
+  .mod-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    cursor: default;
+    transition: border-color .2s;
+  }
+  .mod-box:hover { border-color: var(--accent); }
+  .mod-box .mod-icon { font-size: 28px; margin-bottom: 6px; }
+  .mod-box .mod-name { font-weight: 700; font-size: 14px; }
+  .mod-box .mod-sub  { color: var(--text3); font-size: 11px; margin-top: 2px; }
+
+  /* Version banner */
+  .version-banner {
+    background: linear-gradient(135deg, rgba(124,92,252,.08), rgba(91,141,239,.08));
+    border: 1px solid rgba(124,92,252,.2);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .version-banner .v { font-weight: 700; color: var(--accent); }
+  .version-banner .sep { color: var(--text3); margin: 0 6px; }
+
+  ul { padding-left: 20px; }
+  li { margin-bottom: 4px; }
+
+  .divider { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ==================== HERO ==================== -->
+<div class="hero">
+  <div class="badge">🇰🇷 Korean AI Bot</div>
+  <h1>韩语学习 App V1.0</h1>
+  <p class="sub">完整需求说明书 · 四大核心模块 · 沉浸式全韩语学习体验</p>
+</div>
+
+<!-- ==================== 模块总览 ==================== -->
+<div class="modules-overview">
+  <div class="mod-box">
+    <div class="mod-icon">🎙️</div>
+    <div class="mod-name">AI 口语对练</div>
+    <div class="mod-sub">核心模块</div>
+  </div>
+  <div class="mod-box">
+    <div class="mod-icon">🎧</div>
+    <div class="mod-name">音视频转写精听</div>
+    <div class="mod-sub">跟读训练</div>
+  </div>
+  <div class="mod-box">
+    <div class="mod-icon">📚</div>
+    <div class="mod-name">学习库</div>
+    <div class="mod-sub">单词 & 收藏句子</div>
+  </div>
+  <div class="mod-box">
+    <div class="mod-icon">👤</div>
+    <div class="mod-name">个人中心</div>
+    <div class="mod-sub">学习记录 & 打卡</div>
+  </div>
+</div>
+
+<!-- ==================== 版本规划 ==================== -->
+<div class="version-banner">
+  <span class="v">V1.0 MVP</span> 一期全部落地
+  <span class="sep">|</span>
+  <span class="v">V2.0</span> 语法分析 · 艾宾浩斯 · 发音纠错 · 成就勋章
+</div>
+
+<!-- ==================== 痛点 ==================== -->
+<div class="section">
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+    <span style="font-size:18px;">💡</span>
+    <span style="font-weight:700;">核心解决痛点</span>
+  </div>
+  <div class="grid2">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">🔤</span>韩语夹杂英文词汇识别失败</div>
+      <p>Whisper large-v3 + LLM Prompt 强制保留英文原词，完整识别不截断</p>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">🗣️</span>想用韩语表达却只会中英</div>
+      <p>AI 识别用户意图，输出纯韩语地道表达，先确认再教表达</p>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">🌐</span>AI 回复混杂母语破坏沉浸感</div>
+      <p>对话主界面仅展示韩文，翻译/释义仅在点击弹窗内展示</p>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">📝</span>生词句子无便捷解析复盘</div>
+      <p>点击任意单词/句子即可弹出详解弹窗，一键收藏至学习库</p>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 模块 1：AI 口语对练 ==================== -->
+<div class="section">
+  <span class="sec-num">1</span><span class="sec-title">AI 口语对练</span><span style="color:var(--red);font-size:12px;margin-left:8px;">核心模块</span>
+  <p class="sec-desc">沉浸式全韩语对话 · 混合语种精准识别 · 中英输入智能转韩语应答</p>
+
+  <!-- 1.1 两种对话模式 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">💬</span>1.1 两种对话模式</div>
+    <div class="grid2">
+      <div>
+        <div style="font-weight:600;margin-bottom:6px;">📋 模式 1：分话题结构化对话</div>
+        <p>话题分类：<span class="tag">日常生活</span><span class="tag">职场韩语</span><span class="tag">TOPIK 口语备考</span><span class="tag">自定义话题</span></p>
+        <p style="margin-top:6px;">单话题内置多阶段任务进度（如 <strong>0/3</strong>），完成后标记通关记录</p>
+        <p>高阶话题 <span class="tag orange">会员解锁</span></p>
+        <div style="margin-top:10px;background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;">
+          <span class="tag green">新增</span> <strong>自定义话题冷启动</strong>：用户输入中文话题名 → LLM 自动生成 3 个开场韩语问题供选择
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:600;margin-bottom:6px;">🎭 模式 2：自由对话</div>
+        <p>无固定场景，支持闲聊、表达求助、日常问答</p>
+        <p>配套 <strong>卡通虚拟陪练形象</strong> 沉浸式对话页面</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1.2 输入识别两大核心能力 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">🎯</span>1.2 输入识别两大核心能力</div>
+
+    <!-- 能力 1 -->
+    <div style="font-weight:600;margin-bottom:6px;">能力 1：兼容「韩语穿插少量英文外来词」精准识别</div>
+    <div class="example">例：카페에 <strong>coffee</strong> 마시러 갔어 → 完整识别整句全部语义，不截断、不报错、不丢失词汇</div>
+    <div style="margin-top:6px;font-size:13px;color:var(--text3);">
+      技术选型：ASR 采用 <span class="tag blue">Whisper large-v3</span> + LLM Prompt 强制保留英文原词
+    </div>
+
+    <!-- 能力 2 -->
+    <div style="font-weight:600;margin:16px 0 8px;">能力 2：区分 3 类输入 → 对应不同纯韩语应答逻辑 <span class="tag red">核心约束</span></div>
+
+    <div class="scenario">
+      <div class="label A">场景 A：用户输入纯中文 / 纯英文</div>
+      <p style="font-size:13px;">代表不会韩语表达，想知道地道韩语说法</p>
+      <div style="margin-top:6px;"><strong>回复结构（两句式）：</strong></div>
+      <div class="example">
+        第一句：<span class="ko">이거 맞죠?</span> <span style="color:var(--text3);">← 极度简短万能确认句</span><br>
+        第二句：<span class="ko">내일 친구랑 카페에 가고 싶으신 거예요?</span> <span style="color:var(--text3);">← 完整地道韩语表达</span>
+      </div>
+      <p style="font-size:12px;color:var(--text3);margin-top:4px;">话术底层逻辑：先以韩语确认用户意图，再给出地道韩语表达（全部韩文）</p>
+    </div>
+
+    <div class="scenario">
+      <div class="label B">场景 B：用户输入纯韩语 / 韩语夹杂少量英文外来词</div>
+      <p style="font-size:13px;">AI 承接上下文，用纯韩语自然接续聊天，不插入任何母语文字</p>
+    </div>
+
+    <div class="scenario">
+      <div class="label C">场景 C：用户输入中韩 / 中英混合短句</div>
+      <p style="font-size:13px;">统一判定为「不会韩语完整表达」，执行场景 A 的应答规则</p>
+    </div>
+
+    <div class="redline">不允许出现「这句话韩语是 xx」「翻译成韩语是 xx」这类带中英的引导话术，所有释义、翻译仅能在点击单词/句子弹出的讲解弹窗内展示，对话主界面只有韩文。</div>
+  </div>
+
+  <!-- 1.3 输入交互 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">⌨️</span>1.3 输入交互方式</div>
+    <div class="grid3">
+      <div>
+        <div style="font-weight:600;font-size:13px;">🎤 语音输入</div>
+        <p style="font-size:13px;">支持中/英/混英文韩语/纯韩语，全部精准识别</p>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:13px;">✅ <span class="tag green">新增</span> 语音确认机制</div>
+        <p style="font-size:13px;">语音转文字草稿 → 用户确认/修改 → 点击发送</p>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:13px;">📝 文字输入框</div>
+        <p style="font-size:13px;">手动输入中韩英混合内容提交</p>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:13px;">
+      <strong>上下文记忆：</strong>保留最近 <span class="tag green">10 轮对话</span>，防止 Token 消耗超支
+    </div>
+  </div>
+
+  <!-- 1.4 学习辅助组件 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">🔍</span>1.4 单词 / 句子学习辅助组件 <span style="font-size:12px;color:var(--text3);">（全局统一）</span></div>
+
+    <div class="grid2">
+      <div class="scenario" style="margin:0;">
+        <div class="label">1.4.1 单词点击查词</div>
+        <ul style="font-size:13px;">
+          <li>标准韩语发音（TTS 一键朗读）</li>
+          <li><span class="tag green">优化</span> 词性、多义中文释义、实用例句</li>
+          <li><strong>原型标注</strong>（如 <span class="ko">가고</span> → <span class="ko">가다</span>）</li>
+          <li>收藏默认存原型，原素材出处句子保留变形体</li>
+        </ul>
+      </div>
+      <div class="scenario" style="margin:0;border-left-color:var(--accent2);">
+        <div class="label" style="color:var(--accent2);">1.4.2 整句 AI 讲解</div>
+        <ul style="font-size:13px;">
+          <li>整句完整中文翻译</li>
+          <li>句式使用场景、同义替换韩语表达</li>
+          <li>口语使用注意事项</li>
+          <li>仅主动点击句子才可见释义</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <span style="font-weight:600;font-size:13px;">⭐ 1.4.3 收藏功能：</span>
+      <span style="font-size:13px;">单词、完整句子均可一键收藏，实时同步至模块 3 学习库</span>
+    </div>
+  </div>
+
+  <!-- 1.5 权限 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">🔐</span>1.5 权限与配套功能</div>
+    <div class="grid2">
+      <div>
+        <span class="tag orange">会话限制</span> 免费用户每日对话轮数/时长受限
+      </div>
+      <div>
+        <span class="tag blue">会话存档</span> 全部对话存入模块 4 学习记录
+      </div>
+      <div>
+        <span class="tag">基础操作</span> 清空对话、重新开启话题
+      </div>
+      <div>
+        <span class="tag">🔊 一键朗读</span> 句子标准发音 TTS
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 模块 2：音视频 AI 转文本精听跟读 ==================== -->
+<div class="section">
+  <span class="sec-num">2</span><span class="sec-title">音视频 AI 转文本精听跟读</span>
+
+  <!-- 2.1 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">📤</span>2.1 文件上传与 AI 识别</div>
+    <ul>
+      <li>支持本地音频 <span class="tag">mp3</span><span class="tag">m4a</span>、短视频 <span class="tag">mp4</span><span class="tag">mov</span> 上传解析</li>
+      <li>混合语种识别：韩语+英文外来词完整识别，逐句生成精准韩文文本</li>
+      <li><strong>时间轴对齐：</strong>每句韩文绑定音频时间节点，播放时同步高亮当前句子</li>
+      <li><span class="tag green">新增</span> 转写进度反馈：进度条 + 后台处理 + 完成后推送通知</li>
+    </ul>
+  </div>
+
+  <!-- 2.2 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">▶️</span>2.2 播放器基础功能</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <span class="tag">▶ 播放/暂停</span>
+      <span class="tag">⏮ 上一句/下一句</span>
+      <span class="tag">⚡ 0.5~2.0× 倍速</span>
+      <span class="tag">🔁 单句循环跟读</span>
+      <span class="tag">↔️ 进度拖拽</span>
+      <span class="tag">🔊 TTS 朗读</span>
+    </div>
+  </div>
+
+  <!-- 2.3 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">📖</span>2.3 文本学习辅助 <span style="font-size:12px;color:var(--text3);">（与口语模块交互逻辑统一）</span></div>
+    <ul>
+      <li>页面默认仅展示 <strong>韩文原文</strong>，罗马音可手动开关</li>
+      <li><span class="tag green">优化</span> <strong>显示译文开关</strong>（默认关闭）：开启后句子下方以浅灰色小字展示中文，仅在精听模块允许</li>
+      <li>单词查词：点击弹窗展示释义、发音、例句（同 1.4.1 统一组件）</li>
+      <li>整句 AI 讲解：点击句子弹窗展示翻译、句式解析（同 1.4.2 统一组件）</li>
+      <li>收藏：单词、句子一键存入学习库（同 1.4.3 统一组件）</li>
+    </ul>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 模块 3：学习库 ==================== -->
+<div class="section">
+  <span class="sec-num">3</span><span class="sec-title">学习库</span><span style="font-size:12px;color:var(--text3);margin-left:8px;">单词 + 收藏句子</span>
+
+  <div class="grid2">
+    <!-- 3.1 生词本 -->
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">📝</span>3.1 生词本</div>
+      <ul>
+        <li>数据来源：口语对话 + 音视频精读中手动收藏</li>
+        <li>韩语外来英文单词 <span class="tag blue">单独标签区分</span></li>
+        <li>单词卡片：<span class="ko">变形体 + 原型标注</span>、罗马音、词性、多义中文释义、原素材出处句子</li>
+        <li>复习能力：卡片翻卡自测、标记已掌握/待复习、自定义标签筛选</li>
+      </ul>
+    </div>
+
+    <!-- 3.2 收藏句库 -->
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header"><span class="icon">⭐</span>3.2 收藏句库</div>
+      <ul>
+        <li>存储所有收藏韩语完整句子</li>
+        <li>句子内英文外来词完整保留</li>
+        <li>每条附带来源（对应对话/音视频素材）+ 一键播放标准发音</li>
+        <li>检索：支持 <strong>韩文、中文关键词</strong> 搜索收藏句子</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;font-size:13px;color:var(--text3);padding-left:44px;">
+    ⚠️ V1.0 不包含语法句法分析功能 · 二期预留入口
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 模块 4：个人中心 ==================== -->
+<div class="section">
+  <span class="sec-num">4</span><span class="sec-title">我的</span><span style="font-size:12px;color:var(--text3);margin-left:8px;">个人基础信息 + 全量学习记录</span>
+
+  <!-- 4.1 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">👤</span>4.1 基础信息区域</div>
+    <div class="grid3">
+      <div><strong>账号信息</strong><br><span style="font-size:13px;color:var(--text2);">头像、昵称、学习目标<br><span class="tag">日常交流</span><span class="tag">职场韩语</span><span class="tag">TOPIK 考级</span></span></div>
+      <div><strong>语言等级</strong><br><span style="font-size:13px;color:var(--text2);">A1~C1 分级，可自主选择或 AI 测评定级</span></div>
+      <div><strong>会员专区</strong><br><span style="font-size:13px;color:var(--text2);">会员状态 · 开通入口 · 权益展示</span></div>
+    </div>
+    <div style="margin-top:10px;">
+      <strong>系统设置：</strong>
+      <span class="tag">罗马音开关</span><span class="tag">播放语速</span><span class="tag">缓存清理</span><span class="tag">离线下载</span><span class="tag">意见反馈</span>
+    </div>
+  </div>
+
+  <!-- 4.2 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">📊</span>4.2 学习数据看板 <span style="font-size:12px;color:var(--text3);">（留存激励）</span></div>
+    <div class="grid3">
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:700;color:var(--accent);">📅</div>
+        <div style="font-size:13px;font-weight:600;">周打卡日历</div>
+        <div style="font-size:12px;color:var(--text2);">周一至周日视图<br>标记当日所有学习行为</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:700;color:var(--orange);">🔥</div>
+        <div style="font-size:13px;font-weight:600;">连续打卡</div>
+        <div style="font-size:12px;color:var(--text2);">当前连续天数<br>历史最长连续天数</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:700;color:var(--accent3);">📈</div>
+        <div style="font-size:13px;font-weight:600;">数据汇总</div>
+        <div style="font-size:12px;color:var(--text2);">累计口语轮次 · 精听素材<br>收藏单词/句子总数</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.3 -->
+  <div class="card">
+    <div class="card-header"><span class="icon">📋</span>4.3 分类学习记录 <span style="font-size:12px;color:var(--text3);">（可回溯复习）</span></div>
+    <ul>
+      <li>AI 口语全部历史对话会话</li>
+      <li>所有上传音视频素材 + AI 生成逐句韩文文本</li>
+      <li>单词背诵、句子复习历史</li>
+      <li><span class="tag green">新增</span> <strong>历史记录跳转 = 快照模式（只读）</strong>：防止修改历史数据影响统计；提供「基于此话题重新开始」按钮</li>
+      <li>支持单条 / 批量删除学习记录</li>
+    </ul>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 全局底层能力 ==================== -->
+<div class="section">
+  <span class="sec-num" style="background:var(--accent3);">⚙</span><span class="sec-title">全局底层通用能力</span>
+
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <strong>🌐 混合语种识别引擎</strong>
+        <p style="font-size:13px;">韩语 + 少量英文外来词语音/文字完整识别，无语义丢失</p>
+      </div>
+      <div>
+        <strong>🔊 韩语 TTS 双引擎</strong>
+        <ul style="font-size:13px;">
+          <li><span class="tag green">口语对话</span> ElevenLabs（1万字符/月免费）— 自然情感音质</li>
+          <li><span class="tag blue">精听/朗读</span> 微软 Azure（50万字符/月免费）— 兼顾成本</li>
+          <li>可降级切换，额度用完可按量付费或降级至 Azure</li>
+        </ul>
+      </div>
+      <div>
+        <strong>🧩 统一查词弹窗组件</strong>
+        <p style="font-size:13px;">口语、精读、学习库复用同一套查词交互逻辑（含原型标注）</p>
+      </div>
+      <div>
+        <strong>⭐ 统一收藏通道</strong>
+        <p style="font-size:13px;">任意页面收藏的单词/句子实时同步至模块 3（单词存原型）</p>
+      </div>
+      <div>
+        <strong>📴 离线缓存</strong>
+        <p style="font-size:13px;">音视频素材、收藏词/句支持离线下载，无网络可复习</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== 强制开发约束 ==================== -->
+<div class="section">
+  <span style="font-size:18px;">🚫</span>
+  <span class="sec-title" style="color:var(--red);">强制开发约束清单</span>
+  <span style="font-size:12px;color:var(--red);margin-left:6px;">必须严格落地</span>
+
+  <div class="card" style="border-color:rgba(255,107,107,.25);">
+    <ol style="padding-left:20px;">
+      <li><strong>对话主界面硬性规则：</strong>AI 所有回复、用户发送内容仅展示韩文，全程不出现任何中文、英文、罗马音、解释性汉字单词；翻译、释义、中文讲解仅允许在点击单词/句子弹出的独立弹窗内展示。</li>
+      <li><strong>用户输入中文/英文求助韩语表达时：</strong>AI 回复第一句为简短韩语确认句（如 <span class="ko">이거 맞죠?</span>），第二句为地道韩语表达。严禁使用「这句话韩语是 xx」「翻译成韩语 xx」这类包含中英文字的引导话术。</li>
+      <li><strong>识别兼容要求：</strong>韩语句子中穿插 1~2 个英文外来词，语音、文字输入均需完整识别，不截断、不报错、不丢失词汇语义。</li>
+      <li><strong>沉浸式环境要求：</strong>所有 AI 自动回复、音视频转写文本，不得在韩文段落内穿插中文、英文解释词汇。</li>
+      <li><strong>弹窗交互要求：</strong>讲解弹窗仅作为辅助学习工具，不主动弹出，必须用户手动点击单词/句子才唤起。</li>
+      <li><span class="tag green">新增</span> <strong>零基础用户首次引导：</strong>首次进入口语模块，须弹窗说明全韩语回复机制，并引导用户通过点击句子查看翻译。</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ==================== 版本优先级 ==================== -->
+<div class="section" style="margin-bottom:0;">
+  <span style="font-size:18px;">🚀</span>
+  <span class="sec-title">版本开发优先级</span>
+
+  <div class="grid2" style="margin-top:12px;">
+    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:16px 20px;">
+      <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">✅ V1.0 MVP（一期全部落地）</div>
+      <ul style="font-size:13px;">
+        <li>模块 1：AI 口语对练（混合语种识别、中英→纯韩语确认应答、查词/句讲解、收藏）</li>
+        <li>模块 2：音视频上传 AI 转韩文文本、跟读播放器、查词讲解收藏</li>
+        <li>模块 3：单词本 + 收藏句库（无语法句法分析）</li>
+        <li>模块 4：个人信息、打卡数据、全品类学习记录</li>
+        <li>全局底层：混合语种识别、双 TTS（ElevenLabs + Azure）、统一收藏/查词组件、离线缓存</li>
+      </ul>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;opacity:.7;">
+      <div style="font-weight:700;color:var(--text2);margin-bottom:8px;">🔮 V2.0 二期新增</div>
+      <ul style="font-size:13px;color:var(--text2);">
+        <li>模块 3：句子语法拆分、可视化句法结构、语法题库、艾宾浩斯记忆复习</li>
+        <li>拓展能力：跟读录音原声对比、播客链接导入、AI 发音纠错、成就勋章激励体系</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;margin-top:48px;color:var(--text3);font-size:12px;">
+  Korean AI Bot · PRD V1.0 · 2026.06
+</div>
+
+</div>
+</body>
+</html>

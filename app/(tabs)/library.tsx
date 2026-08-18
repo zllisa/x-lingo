@@ -620,19 +620,37 @@ export default function LibraryScreen() {
       {/* ═══ Grammar Book Entry Detail Modal ═══ */}
       <Modal visible={!!selectedEntry} animationType="slide" presentationStyle="pageSheet">
         <View style={[S.flex1, S.bg]}>
-          <View style={[S.flexRow, S.spaceBetween, S.itemsCenter, { paddingTop: 16, paddingBottom: 12, paddingHorizontal: 16 }, S.borderBottom]}>
-            <View style={[S.row, S.gap2, S.itemsCenter, { flex: 1 }]}>
-              <GraduationCap size={18} color={C.accent} />
-              <Text style={[S.textSm, S.semibold, S.text]} numberOfLines={1}>{selectedEntry?.unit}</Text>
+          <View style={[S.flexRow, { alignItems: 'flex-start', paddingTop: 12, paddingBottom: 10, paddingHorizontal: 12 }, S.borderBottom]}>
+            <View style={[S.flexRow, { alignItems: 'flex-start', flex: 1, minWidth: 0, gap: 8, paddingTop: 3, paddingRight: 8 }]}>
+              <GraduationCap size={18} color={C.accent} style={{ flexShrink: 0, marginTop: 1 }} />
+              <Text
+                style={[S.textSm, S.semibold, S.text, { flex: 1, lineHeight: 22 }]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {selectedEntry?.unit}
+              </Text>
+            </View>
+            <View style={[S.flexRow, { flexShrink: 0, gap: 2 }]}>
               {selectedEntry && (
-                <TouchableOpacity onPress={() => toggleSaveGrammarEntry(selectedEntry)} hitSlop={8}>
-                  <Star size={18} color={savedIds.has(selectedEntry.id) ? C.accent : C.text3} fill={savedIds.has(selectedEntry.id) ? C.accent : 'transparent'} />
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={savedIds.has(selectedEntry.id) ? '取消收藏' : '收藏语法'}
+                  onPress={() => toggleSaveGrammarEntry(selectedEntry)}
+                  style={[S.center, { width: 40, height: 40 }]}
+                >
+                  <Star size={20} color={savedIds.has(selectedEntry.id) ? C.accent : C.text3} fill={savedIds.has(selectedEntry.id) ? C.accent : 'transparent'} />
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="关闭语法详情"
+                onPress={() => setSelectedEntry(null)}
+                style={[S.center, { width: 40, height: 40 }]}
+              >
+                <X size={22} color={C.text2} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setSelectedEntry(null)}>
-              <X size={22} color={C.text2} />
-            </TouchableOpacity>
           </View>
           <ScrollView style={S.flex1} contentContainerStyle={[S.p4, { paddingBottom: 40 }]}>
             {selectedEntry ? (

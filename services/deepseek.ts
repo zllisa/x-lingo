@@ -119,6 +119,70 @@ export async function deepSeekGenerateScenario(description: string, level?: Spea
   };
 }
 
+const TEXTBOOK_SCENARIO_PROMPT = `你是韩语口语陪练设计师。用户会发送一段课文内容，请严格围绕课文设计口语练习，不要擅自改成无关的生活场景。
+返回 JSON：
+{
+  "title": "课文主题中文名（简短，4-8字）",
+  "role": "AI 在练习中扮演的角色（韩语）",
+  "roleCN": "角色中文",
+  "intro": "一句中文说明本次会练习的课文内容",
+  "opening": "AI 根据课文内容说出的第一句韩语（自然、简短，并引导学习者回答）",
+  "tasks": [
+    {"id":"t1","title":"口语任务名（韩语）","titleCN":"任务中文","hint":"基于课文表达的一句韩语提示"}
+  ]
+}
+要求：
+- 只使用课文中出现的主题、人物、事实、词汇和句型；
+- AI 可以扮演课文中的人物、老师或讨论伙伴，选择最适合自然对话的角色；
+- 生成 3-5 个由理解、复述到观点表达逐步加深的任务；
+- 不要要求学习者提供课文之外无法知道的信息；
+- 只输出 JSON，不要任何其它内容。`;
+
+/** Generate a speaking scenario grounded in pasted textbook content. */
+export async function deepSeekGenerateTextbookScenario(content: string, level?: SpeakLevel): Promise<TopicScenario> {
+  const textbook = content.trim().slice(0, 6000);
+  if (!textbook) throw new Error('课文内容不能为空');
+
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: TEXTBOOK_SCENARIO_PROMPT + levelInstruction(level) },
+        { role: 'user', content: `课文内容：\n${textbook}` },
+      ],
+      temperature: 0.35,
+      max_tokens: 1000,
+    }),
+  });
+  if (!response.ok) throw new Error(`DeepSeek textbook scenario error: ${response.status}`);
+
+  const data = await response.json();
+  let result = (data.choices[0].message.content as string || '').trim();
+  result = result.replace(/^```(?:json)?\s*/g, '').replace(/\s*```$/g, '').trim();
+  const start = result.indexOf('{');
+  const end = result.lastIndexOf('}');
+  if (start >= 0 && end > start) result = result.substring(start, end + 1);
+
+  const raw = JSON.parse(result);
+  const tasks = (Array.isArray(raw.tasks) ? raw.tasks : []).map((task: any, index: number) => ({
+    id: typeof task?.id === 'string' && task.id ? task.id : `t${index + 1}`,
+    title: String(task?.title ?? ''),
+    titleCN: String(task?.titleCN ?? ''),
+    hint: task?.hint ? String(task.hint) : undefined,
+  }));
+  if (!tasks.length) throw new Error('未能从课文生成练习任务');
+  return {
+    title: String(raw.title ?? '课文口语练习'),
+    role: String(raw.role ?? '한국어 선생님'),
+    roleCN: String(raw.roleCN ?? '韩语老师'),
+    intro: String(raw.intro ?? '围绕你发送的课文内容进行口语练习。'),
+    opening: String(raw.opening ?? '이 글은 어떤 내용이에요?'),
+    tasks,
+  };
+}
+
 function buildScenarioSystemPrompt(scenario: TopicScenario): string {
   const taskList = scenario.tasks.map((t) => `${t.id}: ${t.title} (${t.titleCN})`).join('\n');
   return `You are role-playing ONLY as ${scenario.role} (${scenario.roleCN}) to help a Korean learner practice speaking. Stay fully in character as this single role for the whole conversation. The LEARNER plays the other side.

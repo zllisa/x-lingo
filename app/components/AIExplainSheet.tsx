@@ -139,8 +139,8 @@ export default function AIExplainSheet({
                   showsVerticalScrollIndicator={sentenceCount > 1}
                 >
                   <View style={[S.bgAccent5, S.roundedSM, { padding: 14 }]}>
-                    <Text selectable style={[S.textBase, S.semibold, S.text, { lineHeight: 24 }]}>{sentence}</Text>
-                    {translation ? <Text selectable style={[S.textSm, S.text2, { marginTop: 6, lineHeight: 21 }]}>{translation}</Text> : null}
+                    <Text selectable selectionColor={C.accent} style={[S.textBase, S.semibold, S.text, { lineHeight: 24 }]}>{sentence}</Text>
+                    {translation ? <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { marginTop: 6, lineHeight: 21 }]}>{translation}</Text> : null}
                   </View>
                 </ScrollView>
                 <TouchableOpacity
@@ -213,7 +213,7 @@ export default function AIExplainSheet({
                       : { alignSelf: 'flex-start', backgroundColor: C.surface2 },
                   ]}
                 >
-                  <Text selectable style={[S.textSm, turn.role === 'user' ? S.textWhite : S.text, { lineHeight: 21 }]}>{turn.text}</Text>
+                  <Text selectable selectionColor={turn.role === 'user' ? '#fff' : C.accent} style={[S.textSm, turn.role === 'user' ? S.textWhite : S.text, { lineHeight: 21 }]}>{turn.text}</Text>
                 </View>
               ))}
               {asking ? <ActivityIndicator color={C.accent} style={{ alignSelf: 'flex-start', margin: 8 }} /> : null}
@@ -255,7 +255,7 @@ function ExplainCard({ title, body }: { title: string; body: string }) {
   return (
     <View style={[S.bgSurface2, S.roundedSM, { padding: 14 }]}>
       <Text selectable style={[S.textXs, S.textAccent, S.semibold, { marginBottom: 6 }]}>{title}</Text>
-      <Text selectable style={[S.textSm, S.text2, { lineHeight: 22 }]}>{body}</Text>
+      <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { lineHeight: 22 }]}>{body}</Text>
     </View>
   );
 }
@@ -273,10 +273,10 @@ function GrammarCard({ grammar, saved, onSave, showDivider }: { grammar: Grammar
           {saved ? <Check size={18} color={C.green} /> : <Star size={18} color={C.accent} />}
         </TouchableOpacity>
       </View>
-      {grammar.detail ? <Text selectable style={[S.textSm, S.text2, { lineHeight: 23 }]}>{grammar.detail}</Text> : null}
+      {grammar.detail ? <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { lineHeight: 23 }]}>{grammar.detail}</Text> : null}
       {grammar.examples?.length ? (
         <View style={{ marginTop: 9, gap: 5 }}>
-          {grammar.examples.map((example, index) => <Text selectable key={index} style={[S.textSm, S.text, { lineHeight: 22 }]}>• {example}</Text>)}
+          {grammar.examples.map((example, index) => <Text selectable selectionColor={C.accent} key={index} style={[S.textSm, S.text, { lineHeight: 22 }]}>• {example}</Text>)}
         </View>
       ) : null}
     </View>

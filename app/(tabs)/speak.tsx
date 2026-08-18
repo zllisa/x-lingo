@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Check, ChevronDown, ChevronRight, GraduationCap, History, MessageSquare, Mic, Sparkles, Wand2 } from 'lucide-react-native';
+import { BookOpen, Check, ChevronDown, ChevronRight, GraduationCap, History, MessageSquare, Mic, Sparkles, Wand2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +41,7 @@ export default function SpeakScreen() {
   const speakLevel = useProfileStore((s) => s.settings.speakLevel ?? 'beginner');
   const updateSettings = useProfileStore((s) => s.updateSettings);
   const [scenarioInput, setScenarioInput] = useState('');
+  const [scenarioSource, setScenarioSource] = useState<'scene' | 'textbook'>('scene');
   const [generating, setGenerating] = useState(false);
   const [showLevelMenu, setShowLevelMenu] = useState(false);
 
@@ -56,8 +57,10 @@ export default function SpeakScreen() {
     if (!text || generating) return;
     setGenerating(true);
     try {
-      const { deepSeekGenerateScenario } = await import('../../services/deepseek');
-      const scenario = await deepSeekGenerateScenario(text, speakLevel);
+      const { deepSeekGenerateScenario, deepSeekGenerateTextbookScenario } = await import('../../services/deepseek');
+      const scenario = scenarioSource === 'textbook'
+        ? await deepSeekGenerateTextbookScenario(text, speakLevel)
+        : await deepSeekGenerateScenario(text, speakLevel);
       useSpeakStore.getState().setActiveScenario(scenario);
       setScenarioInput('');
       navigation.navigate('TaskIntro');
@@ -118,18 +121,46 @@ export default function SpeakScreen() {
           <View style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
               <Text style={[{ fontSize: 15 }, S.text2, { lineHeight: 23, marginBottom: 14 }]}>
-                描述一个生活场景，AI 会扮演对应角色，按你的水平生成几个任务，带你一步步用韩语完成。
+                {scenarioSource === 'scene'
+                  ? '描述一个生活场景，AI 会扮演对应角色，按你的水平生成几个任务，带你一步步用韩语完成。'
+                  : '粘贴课文内容，AI 会围绕课文的主题、人物和表达，带你完成理解、复述与观点练习。'}
               </Text>
 
+              <View style={[S.flexRow, { gap: 8, marginBottom: 14 }]}>
+                {([
+                  { key: 'scene', label: '生活情景', icon: Sparkles },
+                  { key: 'textbook', label: '课文练习', icon: BookOpen },
+                ] as const).map(({ key, label, icon: Icon }) => {
+                  const selected = scenarioSource === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[S.flex1, S.center, S.flexRow, S.roundedFull, { height: 42, gap: 6 }, selected ? S.bgAccent15 : [S.bgSurface, S.border]]}
+                      onPress={() => { setScenarioSource(key); setScenarioInput(''); }}
+                      disabled={generating}
+                    >
+                      <Icon size={16} color={selected ? C.accent : C.text2} />
+                      <Text style={[S.textSm, S.semibold, selected ? S.textAccent : S.text2]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               {/* Input */}
-              <View style={[S.bgSurface, S.border, S.roundedCard, { height: 54, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 14 }]}>
+              <View style={[S.bgSurface, S.border, S.roundedCard, scenarioSource === 'textbook'
+                ? { minHeight: 172, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 14 }
+                : { height: 54, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 14 }]}>
                 <TextInput
-                  style={[S.text, { fontSize: 15 }]}
+                  style={[S.text, { fontSize: 15 }, scenarioSource === 'textbook' ? { minHeight: 146, lineHeight: 23, textAlignVertical: 'top' } : null]}
                   value={scenarioInput}
                   onChangeText={setScenarioInput}
-                  placeholder="例如：在便利店买水和零食"
+                  placeholder={scenarioSource === 'textbook' ? '在这里粘贴韩语课文内容…' : '例如：在便利店买水和零食'}
                   placeholderTextColor={C.text3}
                   editable={!generating}
+                  multiline={scenarioSource === 'textbook'}
+                  maxLength={scenarioSource === 'textbook' ? 6000 : 300}
                 />
               </View>
 
@@ -145,23 +176,29 @@ export default function SpeakScreen() {
                 disabled={generating}
               >
                 {generating ? <ActivityIndicator size="small" color="#fff" /> : <Wand2 size={19} color="#fff" />}
-                <Text style={[S.textWhite, S.bold, { fontSize: 17 }]}>{generating ? '正在生成场景...' : '生成场景'}</Text>
+                <Text style={[S.textWhite, S.bold, { fontSize: 17 }]}>
+                  {generating ? '正在生成练习...' : scenarioSource === 'textbook' ? '根据课文生成练习' : '生成场景'}
+                </Text>
               </TouchableOpacity>
 
               {/* Suggestions */}
-              <Text style={[{ fontSize: 14 }, S.text3, { marginBottom: 10 }]}>试试这些</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {SCENARIO_SUGGESTIONS.map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[S.bgSurface, S.border, S.roundedFull, { paddingHorizontal: 17, paddingVertical: 9 }, generating ? { opacity: 0.5 } : null]}
-                    onPress={() => generateScenario(s)}
-                    disabled={generating}
-                  >
-                    <Text style={[{ fontSize: 14 }, S.semibold, S.text2]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {scenarioSource === 'scene' ? (
+                <>
+                  <Text style={[{ fontSize: 14 }, S.text3, { marginBottom: 10 }]}>试试这些</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {SCENARIO_SUGGESTIONS.map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[S.bgSurface, S.border, S.roundedFull, { paddingHorizontal: 17, paddingVertical: 9 }, generating ? { opacity: 0.5 } : null]}
+                        onPress={() => generateScenario(s)}
+                        disabled={generating}
+                      >
+                        <Text style={[{ fontSize: 14 }, S.semibold, S.text2]}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </ScrollView>
 
             {/* Continue last session — pinned to bottom */}

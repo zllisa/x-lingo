@@ -2,7 +2,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   AudioLines, BookOpen, Check, CheckCircle2, ChevronLeft, Copy, Lightbulb,
-  MessageCircle, Mic, MoreHorizontal, Pause, Play, Puzzle, Repeat, Scissors, SkipBack,
+  MessageCircle, Mic, MoreHorizontal, Pause, Pencil, Play, Puzzle, Repeat, Scissors, SkipBack,
   SkipForward, Sparkles, Star, Type, Volume2, X,
 } from 'lucide-react-native';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -72,6 +72,7 @@ export default function PlayerScreen() {
     audioFiles, activeFileId, transcripts, showTranslation, toggleTranslation,
     playerSpeed, setSpeed, isPlaying, setPlaying, progress, setProgress,
     transcriptIdx, setTranscriptIdx, transcribeJobs, startTranscribeJob, clearTranscribeJob,
+    setTranscript,
   } = useListenStore();
   const file = audioFiles.find(f => f.id === activeFileId);
   const items = activeFileId ? transcripts[activeFileId] || [] : [];
@@ -215,6 +216,9 @@ export default function PlayerScreen() {
   const pendingExplainIdxRef = useRef<number | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [selectedSubtitleIndices, setSelectedSubtitleIndices] = useState<number[]>([]);
+  const [editingSubtitleIndex, setEditingSubtitleIndex] = useState<number | null>(null);
+  const [editingSubtitleText, setEditingSubtitleText] = useState('');
+  const [editingTranslationText, setEditingTranslationText] = useState('');
   const selectionMode = selectedSubtitleIndices.length > 0;
   useEffect(() => setSelectedSubtitleIndices([]), [activeFileId]);
   const grammarPoints = useLibraryStore(s => s.grammarPoints);
@@ -622,6 +626,42 @@ export default function PlayerScreen() {
     navigation.navigate('WordDetail', { word: clean, source: '精听跟读' });
   }, [navigation, selectedSubtitleIndices.length, toggleSubtitleSelection]);
 
+  const openSubtitleEditor = useCallback((index: number) => {
+    const item = items[index];
+    if (!item) return;
+    setEditingSubtitleIndex(index);
+    setEditingSubtitleText(item.ko);
+    setEditingTranslationText(item.zh || '');
+  }, [items]);
+
+  const closeSubtitleEditor = useCallback(() => {
+    setEditingSubtitleIndex(null);
+    setEditingSubtitleText('');
+    setEditingTranslationText('');
+  }, []);
+
+  const saveSubtitleEdit = useCallback(() => {
+    if (!activeFileId || editingSubtitleIndex === null) return;
+    const ko = editingSubtitleText.trim();
+    if (!ko) {
+      Alert.alert('字幕不能为空', '请输入这一句的正确字幕。');
+      return;
+    }
+    const currentItems = useListenStore.getState().transcripts[activeFileId] || [];
+    const current = currentItems[editingSubtitleIndex];
+    if (!current) return;
+    const nextItems = [...currentItems];
+    nextItems[editingSubtitleIndex] = {
+      ...current,
+      ko,
+      zh: editingTranslationText.trim(),
+      // 旧讲解是根据修改前字幕生成的，保留会造成讲解与字幕不一致。
+      explain: ko === current.ko ? current.explain : undefined,
+    };
+    setTranscript(activeFileId, nextItems);
+    closeSubtitleEditor();
+  }, [activeFileId, closeSubtitleEditor, editingSubtitleIndex, editingSubtitleText, editingTranslationText, setTranscript]);
+
   const renderTranscriptRow = useCallback(
     ({ item, index }: { item: TranscriptItem; index: number }) => (
       <TranscriptRow
@@ -636,9 +676,10 @@ export default function PlayerScreen() {
         onPress={handleSubtitlePress}
         onLongPress={toggleSubtitleSelection}
         onWordPress={handleSubtitleWordPress}
+        onEdit={openSubtitleEditor}
       />
     ),
-    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection, handleSubtitleWordPress],
+    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection, handleSubtitleWordPress, openSubtitleEditor],
   );
 
   const toggleRomajaStable = () => {
@@ -1513,7 +1554,7 @@ export default function PlayerScreen() {
                             <Lightbulb size={14} color={C.accent} />
                             <Text style={[S.textXs, S.textAccent, S.semibold]}>为什么这样表达</Text>
                           </View>
-                          <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.why}</Text>
+                          <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.why}</Text>
                         </View>
                       ) : null}
 
@@ -1529,8 +1570,8 @@ export default function PlayerScreen() {
                             const meaning = typeof w?.meaning === 'string' ? w.meaning : String(w?.meaning ?? '');
                             return (
                             <View key={i} style={[S.flexRow, { paddingVertical: 4, borderBottomWidth: i < exp.words.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
-                              <Text style={[S.textSm, S.text, S.bold, { minWidth: 90 }]}>{word}</Text>
-                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{meaning}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text, S.bold, { minWidth: 90 }]}>{word}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { flex: 1 }]}>{meaning}</Text>
                             </View>
                             );
                           })}
@@ -1553,7 +1594,7 @@ export default function PlayerScreen() {
                             return (
                               <View key={i} style={[S.flexRow, S.spaceBetween, S.itemsCenter, { paddingVertical: 4 }]}>
                                 <View style={{ flex: 1 }}>
-                                  <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{text}</Text>
+                                  <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { lineHeight: 22 }]}>{text}</Text>
                                   <View style={[S.row, S.gap15, { marginTop: 2 }]}>
                                     <Text style={[S.textXs, { color: level === 'beginner' ? C.green : level === 'intermediate' ? C.orange : C.pink }]}>
                                       {level === 'beginner' ? '初级' : level === 'intermediate' ? '中级' : '高级'}
@@ -1590,8 +1631,8 @@ export default function PlayerScreen() {
                           </View>
                           {exp.chunks.map((c: { chunk: string; meaning: string }, i: number) => (
                             <View key={i} style={[S.flexRow, { paddingVertical: 4, borderBottomWidth: i < exp.chunks.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
-                              <Text style={[S.textSm, S.text, S.bold, { minWidth: 110 }]}>{c.chunk}</Text>
-                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text, S.bold, { minWidth: 110 }]}>{c.chunk}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
                             </View>
                           ))}
                         </View>
@@ -1606,10 +1647,10 @@ export default function PlayerScreen() {
                           </View>
                           {exp.contractions.map((c: { form: string; full: string; meaning: string }, i: number) => (
                             <View key={i} style={[S.flexRow, S.itemsCenter, { paddingVertical: 4, borderBottomWidth: i < exp.contractions.length - 1 ? 1 : 0, borderBottomColor: C.border }]}>
-                              <Text style={[S.textSm, S.text, S.bold]}>{c.form}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text, S.bold]}>{c.form}</Text>
                               <Text style={[S.textXs, S.text3, { marginHorizontal: 6 }]}>→</Text>
-                              <Text style={[S.textSm, S.text, S.semibold, { minWidth: 70 }]}>{c.full}</Text>
-                              <Text style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text, S.semibold, { minWidth: 70 }]}>{c.full}</Text>
+                              <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { flex: 1 }]}>{c.meaning}</Text>
                             </View>
                           ))}
                         </View>
@@ -1623,7 +1664,7 @@ export default function PlayerScreen() {
                             <Text style={[S.textXs, S.textAccent, S.semibold]}>使用案例</Text>
                           </View>
                           {exp.examples.map((ex: string, i: number) => (
-                            <Text key={i} style={[S.textSm, S.text2, { lineHeight: 22, paddingVertical: 2 }]}>
+                            <Text selectable selectionColor={C.accent} key={i} style={[S.textSm, S.text2, { lineHeight: 22, paddingVertical: 2 }]}>
                               {i + 1}. {typeof ex === 'string' ? ex : String(ex ?? '')}
                             </Text>
                           ))}
@@ -1637,7 +1678,7 @@ export default function PlayerScreen() {
                             <Volume2 size={14} color={C.accent} />
                             <Text style={[S.textXs, S.textAccent, S.semibold]}>使用场景</Text>
                           </View>
-                          <Text style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.usage}</Text>
+                          <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { lineHeight: 22 }]}>{exp.usage}</Text>
                         </View>
                       ) : null}
                     </>
@@ -1703,6 +1744,57 @@ export default function PlayerScreen() {
             </View>
           </View>
         </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={editingSubtitleIndex !== null}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={closeSubtitleEditor}
+      >
+        <View style={[S.flex1, S.center, { paddingHorizontal: 20, backgroundColor: 'rgba(20,18,32,0.48)' }]}>
+          <View style={[S.bg, S.roundedSM, { width: '100%', maxWidth: 560, padding: 18 }]}>
+            <View style={[S.flexRow, S.itemsCenter, S.spaceBetween, { marginBottom: 14 }]}>
+              <View>
+                <Text style={[S.textBase, S.text, S.bold]}>修改这一句字幕</Text>
+                <Text style={[S.textXs, S.text3, { marginTop: 3 }]}>时间轴不会改变，只修改当前句</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="关闭字幕编辑" onPress={closeSubtitleEditor} style={[S.center, { width: 40, height: 40 }]}>
+                <X size={21} color={C.text2} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[S.textXs, S.text3, S.semibold, { marginBottom: 6 }]}>原文字幕</Text>
+            <TextInput
+              autoFocus
+              multiline
+              value={editingSubtitleText}
+              onChangeText={setEditingSubtitleText}
+              placeholder="输入正确字幕"
+              placeholderTextColor={C.text3}
+              selectionColor={C.accent}
+              style={[S.textBase, S.text, S.bgSurface2, S.roundedSM, { minHeight: 92, padding: 12, textAlignVertical: 'top', lineHeight: 24 }]}
+            />
+            <Text style={[S.textXs, S.text3, S.semibold, { marginTop: 14, marginBottom: 6 }]}>中文翻译（可选）</Text>
+            <TextInput
+              multiline
+              value={editingTranslationText}
+              onChangeText={setEditingTranslationText}
+              placeholder="也可以一起修改中文翻译"
+              placeholderTextColor={C.text3}
+              selectionColor={C.accent}
+              style={[S.textSm, S.text, S.bgSurface2, S.roundedSM, { minHeight: 72, padding: 12, textAlignVertical: 'top', lineHeight: 22 }]}
+            />
+            <View style={[S.flexRow, { justifyContent: 'flex-end', gap: 10, marginTop: 18 }]}>
+              <TouchableOpacity onPress={closeSubtitleEditor} style={[S.center, S.roundedFull, { paddingHorizontal: 20, height: 44, borderWidth: 1, borderColor: C.border }]}>
+                <Text style={[S.textSm, S.text2, S.semibold]}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveSubtitleEdit} style={[S.center, S.roundedFull, S.bgAccent, { paddingHorizontal: 24, height: 44 }]}>
+                <Text style={[S.textSm, S.textWhite, S.semibold]}>保存修改</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1976,9 +2068,10 @@ interface TranscriptRowProps {
   onPress: (index: number) => void;
   onLongPress: (index: number) => void;
   onWordPress: (index: number, word: string) => void;
+  onEdit: (index: number) => void;
 }
 const TranscriptRow = memo(function TranscriptRow({
-  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress, onWordPress,
+  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress, onWordPress, onEdit,
 }: TranscriptRowProps) {
   const words = useMemo(() => romanizeWords(item.ko), [item.ko]);
   const longPressedRef = useRef(false);
@@ -2016,7 +2109,18 @@ const TranscriptRow = memo(function TranscriptRow({
             {selected ? <Check size={15} color="#fff" strokeWidth={3} /> : null}
           </View>
         ) : null}
-        <Text style={[S.textXs, S.text3]}>{item.time}</Text>
+        <Text style={[S.textXs, S.text3, { flex: 1 }]}>{item.time}</Text>
+        {!selectionMode ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`修改第 ${index + 1} 句字幕`}
+            hitSlop={8}
+            onPress={() => onEdit(index)}
+            style={[S.center, { width: 32, height: 32, marginVertical: -6 }]}
+          >
+            <Pencil size={14} color={C.text3} />
+          </TouchableOpacity>
+        ) : null}
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {words.map((p, wi) => {
