@@ -33,6 +33,14 @@ export function qiniuEnabled(): boolean {
   return !!(QINIU_ACCESS_KEY && QINIU_SECRET_KEY && QINIU_BUCKET && QINIU_DOMAIN);
 }
 
+export function qiniuKeyFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  const base = QINIU_DOMAIN.replace(/\/$/, '');
+  const clean = url.split('?')[0];
+  const prefix = `${base}/`;
+  return clean.startsWith(prefix) ? clean.slice(prefix.length) : undefined;
+}
+
 // ── token ──
 
 function urlsafe(b64: string): string {
@@ -215,7 +223,10 @@ async function waitForTranscode(persistentId: string): Promise<string> {
  * cached file has been purged and must be re-fetched for playback.
  */
 export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
-  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.wav`;
+  const urlPath = downloadUrl.split('?')[0];
+  const rawExt = (urlPath.split('.').pop() || 'm4a').toLowerCase();
+  const ext = /^[a-z0-9]{2,5}$/.test(rawExt) ? rawExt : 'm4a';
+  const localPath = `${CachesDirectoryPath}/qiniu_${Date.now()}.${ext}`;
 
   console.log('[Qiniu] Downloading', downloadUrl, '→', localPath);
 
@@ -258,7 +269,12 @@ export async function downloadQiniuAudio(downloadUrl: string): Promise<string> {
  * without waiting for the transcode to finish. The caller should store the
  * returned transcodeId and later call resumeTranscodeAudio() to get the WAV.
  */
-export async function uploadAndTriggerTranscode(videoUri: string, userId?: string): Promise<{ transcodeId: string; videoKey: string }> {
+export async function uploadAndTriggerTranscode(videoUri: string, userId?: string): Promise<{
+  transcodeId: string;
+  videoKey: string;
+  playbackAudioKey: string;
+  playbackAudioUrl: string;
+}> {
   const ext = (videoUri.split('?')[0].split('.').pop() || '').toLowerCase();
   const isVideo = ['mp4', 'mov', 'm4v'].includes(ext);
   let uploadUri = videoUri;
@@ -277,8 +293,13 @@ export async function uploadAndTriggerTranscode(videoUri: string, userId?: strin
 
     const key = await uploadToQiniu(uploadUri, userId);
     const transcodeId = await triggerTranscode(key);
-    // 返回源文件 key；云端 WAV 产出后由调用方删除以省存储。
-    return { transcodeId, videoKey: key };
+    // 高质量源长期用于播放；16 kHz WAV 只负责识别与时间轴。
+    return {
+      transcodeId,
+      videoKey: key,
+      playbackAudioKey: key,
+      playbackAudioUrl: `${QINIU_DOMAIN}/${key}`,
+    };
   } finally {
     if (extractedAudioUri) {
       const path = decodeURIComponent(extractedAudioUri.replace(/^file:\/\//, ''));

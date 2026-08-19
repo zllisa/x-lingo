@@ -1,12 +1,10 @@
 import { whisperWords } from './whisperSTT';
-// Azure STT 保留备用 — import { azureSTTWithTimestamps, type AzureSTTSegment } from './azureSTT';
-import { azureBatchWords } from './azureBatchSTT';
+import { groqProxyWords } from './groqProxySTT';
 import { resegmentWords, type Word } from './resegment';
 import { deepSeekTranslate, deepSeekTranslateBatch, deepSeekResegment } from './deepseek';
-import { qiniuExtractAudio, qiniuEnabled, resumeTranscodeAudio, resumeTranscodeUrl } from './qiniu';
+import { qiniuExtractAudio, qiniuEnabled, resumeTranscodeAudio } from './qiniu';
 import { extractAudio } from './AudioExtractor';
 import { stat } from '@dr.pogodin/react-native-fs';
-import { STT_PROVIDER } from '../constants/api';
 import type { TranscriptItem } from '../types';
 
 function formatTime(seconds: number): string {
@@ -57,49 +55,19 @@ export async function transcribeFile(
   transcodeId?: string,
   existingRemoteAudioUrl?: string,
   userId?: string,
-  fileId?: string,
 ): Promise<{ items: TranscriptItem[]; remoteAudioUrl?: string; localAudioUri?: string }> {
   let audioUri = fileUri;
   let remoteAudioUrl: string | undefined = existingRemoteAudioUrl;
-  // Azure Batch transcribes straight from the Qiniu URL — no local WAV needed.
-  const useAzure = STT_PROVIDER === 'azure';
-
-  if (useAzure && existingRemoteAudioUrl) {
-    // ── 重新识别 ── 已经有远端音频（首次识别时上传/转码过），直接复用，跳过
-    // 转码。避免复用早已完成/被清理的旧 transcodeId 去 resume 导致立即报错，
-    // 那正是「点了识别却像没反应」的根因。
-    onProgress?.('正在准备音频（复用已上传音频）...');
-    try {
-      const { downloadQiniuAudio } = await import('./qiniu');
-      audioUri = await downloadQiniuAudio(existingRemoteAudioUrl);
-    } catch (e: any) {
-      // 下载本地缓存失败不致命——Azure 服务端会直接从 remoteAudioUrl 拉取。
-      console.warn('[Transcription] re-identify local cache download failed:', e?.message);
-    }
-  } else if (transcodeId) {
+  if (transcodeId) {
     // Transcode was triggered at upload time — just poll for completion.
     onProgress?.('正在等待云端转码完成...');
-    if (useAzure) {
-      remoteAudioUrl = await resumeTranscodeUrl(transcodeId);
-      // Also download the WAV locally during transcription — avoids the
-      // RNFS.downloadFile native promise crash on the player page later.
-      // The player can then load from the local file directly.
-      onProgress?.('正在缓存音频文件...');
-      const { downloadQiniuAudio } = await import('./qiniu');
-      audioUri = await downloadQiniuAudio(remoteAudioUrl);
-    } else {
-      const q = await resumeTranscodeAudio(transcodeId);
-      audioUri = q.uri;
-      remoteAudioUrl = q.remoteUrl;
-    }
-  } else if (useAzure) {
-    // All metered listening transcription must use the same secure Azure Batch
-    // path. Convert both audio and video to our known PCM WAV format first so
-    // the backend can derive authoritative duration from Content-Length.
-    if (!qiniuEnabled()) {
-      throw new Error('Azure Batch 计费模式需要先配置七牛云转码服务');
-    }
-    onProgress?.('正在上传至七牛云并准备音频...');
+    const q = await resumeTranscodeAudio(transcodeId);
+    audioUri = q.uri;
+    remoteAudioUrl = q.remoteUrl;
+  } else if (qiniuEnabled()) {
+    // The server-side Groq proxy only accepts an owned Qiniu URL. Upload and
+    // normalize legacy/local material before requesting transcription.
+    onProgress?.('正在上传并准备识别音频...');
     const q = await qiniuExtractAudio(fileUri, userId);
     audioUri = q.uri;
     remoteAudioUrl = q.remoteUrl;
@@ -120,20 +88,18 @@ export async function transcribeFile(
   }
 
   // ── STT ── 只取「文字 + 逐词时间戳」，扔掉 ASR 自带的分句（Miraa 路线）。
-  // Azure mode always reaches this point with a server-verifiable Qiniu WAV.
+  // All listening material uses the same Whisper word-timestamp pipeline.
   let words: Word[];
-  if (useAzure && remoteAudioUrl) {
-    onProgress?.('正在识别语音 (Azure 云端识别)...');
-    console.log('[Transcription] Azure Batch STT from', remoteAudioUrl);
-    words = await azureBatchWords(remoteAudioUrl, onProgress, fileId || 'listen-file');
-  } else if (!useAzure) {
-    if (!(audioUri === fileUri && isVideo(fileUri))) {
-      onProgress?.('正在识别语音 (Groq Whisper)...');
-    }
-    console.log('[Transcription] Groq STT audioUri:', audioUri);
-    words = await whisperWords(audioUri);
+  if (!(audioUri === fileUri && isVideo(fileUri))) {
+    onProgress?.('正在识别语音 (Groq Whisper)...');
+  }
+  if (remoteAudioUrl) {
+    console.log('[Transcription] Groq server proxy from:', remoteAudioUrl);
+    words = await groqProxyWords(remoteAudioUrl);
   } else {
-    throw new Error('Azure Batch 缺少可识别的远端音频');
+    // Development fallback when Qiniu/Supabase is not configured.
+    console.log('[Transcription] Groq direct fallback audioUri:', audioUri);
+    words = await whisperWords(audioUri);
   }
 
   if (!words.length) {

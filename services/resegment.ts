@@ -167,12 +167,24 @@ export async function resegmentWords(
   try {
     onProgress?.('正在语义断句 (LLM)...');
     const sentences = await llmResegment(plainText);
+    // A syntactically valid, non-empty LLM response can still be truncated or
+    // omit lyrics/background speech after a long musical gap. Accepting that
+    // response would silently discard every timed ASR word in the missing
+    // tail. Require exact normalized coverage before touching the timeline;
+    // otherwise the local segmenter preserves every recognized word.
+    const inputNorm = normalize(plainText);
+    const outputNorm = normalize(sentences.join(' '));
+    if (!inputNorm || outputNorm !== inputNorm) {
+      throw new Error(`resegment 内容不完整 (${outputNorm.length}/${inputNorm.length})`);
+    }
     const segs = realign(words, sentences);
-    if (segs.length) {
+    const lastWord = words[words.length - 1];
+    const lastSegment = segs[segs.length - 1];
+    if (segs.length && lastSegment && lastSegment.end >= lastWord.end - 0.01) {
       console.log('[Resegment] LLM produced', segs.length, 'segments from', words.length, 'words');
       return segs;
     }
-    throw new Error('realign 未产出任何句子');
+    throw new Error('realign 未覆盖完整时间轴');
   } catch (e: any) {
     console.warn('[Resegment] LLM 断句失败，回落本地规则:', e?.message);
     onProgress?.('语义断句失败，使用本地断句...');

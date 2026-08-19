@@ -40,10 +40,20 @@ npx supabase secrets set \
   QINIU_PUBLIC_BASE_URL=https://qiniu.example.com
 ```
 
+Groq Whisper is called only by the `groq-stt` Edge Function. Store its key as
+a server secret; never put it in a production `PUBLIC_` environment variable.
+
+```bash
+npx supabase secrets set \
+  GROQ_API_KEY=replace_me \
+  QINIU_PUBLIC_BASE_URL=https://qiniu.example.com
+```
+
 ## 4. Deploy the Edge Function
 
 ```bash
 npx supabase functions deploy stt-batch
+npx supabase functions deploy groq-stt
 ```
 
 ## 5. Enable unlimited access for the owner

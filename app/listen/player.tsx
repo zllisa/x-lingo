@@ -1,3 +1,4 @@
+import { DocumentDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -5,15 +6,15 @@ import {
   MessageCircle, Mic, MoreHorizontal, Pause, Pencil, Play, Puzzle, Repeat, Scissors, SkipBack,
   SkipForward, Sparkles, Star, Type, Volume2, X,
 } from 'lucide-react-native';
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActionSheetIOS, ActivityIndicator, Alert, AppState, FlatList, Modal, PermissionsAndroid,
-  Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
+  Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { DocumentDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
-import Share from 'react-native-share';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Share from 'react-native-share';
+import { formatUsageMinutes } from '../../services/usage';
 import {
   addPlaybackListener,
   getStatus,
@@ -25,17 +26,16 @@ import {
   unload,
   type PlaybackEvent,
 } from '../../services/VariAudioPlayer';
-import { useListenStore, type TranscribeJob } from '../../stores/useListenStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useListenStore, type TranscribeJob } from '../../stores/useListenStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useUsageStore } from '../../stores/useUsageStore';
-import { formatUsageMinutes } from '../../services/usage';
+import type { TranscriptItem } from '../../types';
+import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 import { romanizeWords } from '../../utils/romanize';
 import { C, S } from '../../utils/theme';
 import { RootStackParamList } from '../App';
-import type { TranscriptItem } from '../../types';
 import AIExplainSheet from '../components/AIExplainSheet';
-import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -413,12 +413,45 @@ export default function PlayerScreen() {
 
     if (playableUriRef.current) { await doLoad(playableUriRef.current); return; }
 
-    // Prefer locally-cached WAV (downloaded during transcription via pure-JS
-    // fetch). Verify it still exists — iOS may have purged the cache folder.
+    // Keep the speech-recognition WAV separate from the listening source. It is
+    // 16 kHz mono and may sound noticeably quieter than the original. Audio
+    // files should therefore play their original URI first; videos still need
+    // the extracted/transcoded audio because AVAudioPlayer cannot play them.
+    const sourcePath = file.uri.split('?')[0];
+    const isVideoUri = /\.(mp4|mov|m4v)$/i.test(sourcePath) || file.uri.startsWith('ph://');
+
+    if (!isVideoUri) {
+      try {
+        await doLoad(file.uri);
+        playableUriRef.current = file.uri;
+        return;
+      } catch (e: any) {
+        console.warn('[Player] original audio unavailable, falling back:', e?.message || e);
+      }
+    }
+
+    // If the device copy was deleted, restore the high-quality source from
+    // Qiniu before considering the lower-quality recognition WAV.
+    if (file.playbackAudioUrl) {
+      setRestoring(true);
+      try {
+        const { downloadQiniuAudio } = await import('../../services/qiniu');
+        const local = await downloadQiniuAudio(file.playbackAudioUrl);
+        await doLoad(local);
+        playableUriRef.current = local;
+        return;
+      } catch (e: any) {
+        console.warn('[Player] high-quality cloud source unavailable:', e?.message || e);
+      } finally {
+        setRestoring(false);
+      }
+    }
+
+    // Finally fall back to the locally cached recognition WAV.
     if (file.localAudioUri) {
       try {
         const { exists } = await import('@dr.pogodin/react-native-fs');
-        const fp = file.localAudioUri.replace(/^file:\/\//, '');
+        const fp = decodeURIComponent(file.localAudioUri.replace(/^file:\/\//, ''));
         if (await exists(fp)) {
           await doLoad(file.localAudioUri);
           playableUriRef.current = file.localAudioUri;
@@ -428,22 +461,11 @@ export default function PlayerScreen() {
       } catch {}
     }
 
-    // AVAudioPlayer cannot play video containers — skip directly to Qiniu audio
-    const isVideoUri = /\.(mp4|mov|m4v)$/i.test(file.uri) || file.uri.startsWith('ph://');
-
-    if (!isVideoUri) {
-      try {
-        await doLoad(file.uri);
-        playableUriRef.current = file.uri;
-        return;
-      } catch (e) {
-        if (!file.remoteAudioUrl) throw e;
-      }
-    } else if (!file.remoteAudioUrl) {
-      throw new Error('无可播放的音频，请重新识别');
+    if (!file.remoteAudioUrl) {
+      throw new Error(isVideoUri ? '无可播放的音频，请重新识别' : '原音频已不可用，请重新上传');
     }
 
-    // Download audio from Qiniu (either video fallback or first-time restore)
+    // Download the recognition WAV as the last cloud fallback.
     setRestoring(true);
     try {
       const { downloadQiniuAudio } = await import('../../services/qiniu');
@@ -635,6 +657,7 @@ export default function PlayerScreen() {
   }, [items]);
 
   const closeSubtitleEditor = useCallback(() => {
+    Keyboard.dismiss();
     setEditingSubtitleIndex(null);
     setEditingSubtitleText('');
     setEditingTranslationText('');
@@ -662,6 +685,13 @@ export default function PlayerScreen() {
     closeSubtitleEditor();
   }, [activeFileId, closeSubtitleEditor, editingSubtitleIndex, editingSubtitleText, editingTranslationText, setTranscript]);
 
+  const editSelectedSubtitle = useCallback(() => {
+    if (selectedSubtitleIndices.length !== 1) return;
+    const index = selectedSubtitleIndices[0];
+    setSelectedSubtitleIndices([]);
+    openSubtitleEditor(index);
+  }, [openSubtitleEditor, selectedSubtitleIndices]);
+
   const renderTranscriptRow = useCallback(
     ({ item, index }: { item: TranscriptItem; index: number }) => (
       <TranscriptRow
@@ -676,10 +706,9 @@ export default function PlayerScreen() {
         onPress={handleSubtitlePress}
         onLongPress={toggleSubtitleSelection}
         onWordPress={handleSubtitleWordPress}
-        onEdit={openSubtitleEditor}
       />
     ),
-    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection, handleSubtitleWordPress, openSubtitleEditor],
+    [transcriptIdx, wordIdx, showRomaja, showTranslation, selectedSubtitleIndices, selectionMode, handleSubtitlePress, toggleSubtitleSelection, handleSubtitleWordPress],
   );
 
   const toggleRomajaStable = () => {
@@ -1369,6 +1398,16 @@ export default function PlayerScreen() {
               <Text style={[S.textSm, S.text, S.semibold]}>已选 {selectedSubtitleIndices.length} 句</Text>
               <Text style={[S.textXxs, S.text3, { marginTop: 2 }]}>点击字幕继续选择</Text>
             </View>
+            {selectedSubtitleIndices.length === 1 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="修改已选择的字幕"
+                onPress={editSelectedSubtitle}
+                style={[S.center, S.roundedFull, S.bgSurface2, { width: 44, height: 44 }]}
+              >
+                <Pencil size={17} color={C.accent} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={`复制已选择的 ${selectedSubtitleIndices.length} 句字幕`}
@@ -1381,10 +1420,10 @@ export default function PlayerScreen() {
               accessibilityRole="button"
               accessibilityLabel={`询问 AI，已选择 ${selectedSubtitleIndices.length} 句字幕`}
               onPress={openSelectedExplain}
-              style={[S.flexRow, S.center, S.roundedFull, S.bgAccent, { gap: 7, height: 44, paddingHorizontal: 20 }]}
+              style={[S.flexRow, S.center, S.roundedFull, S.bgAccent, { gap: 4, height: 40, paddingHorizontal: 12 }]}
             >
-              <Sparkles size={17} color="#fff" />
-              <Text style={[S.textSm, S.textWhite, S.semibold]}>问 AI</Text>
+              <Sparkles size={15} color="#fff" />
+              <Text style={[S.textXs, S.textWhite, S.semibold]}>问 AI</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1754,8 +1793,17 @@ export default function PlayerScreen() {
         animationType="fade"
         onRequestClose={closeSubtitleEditor}
       >
-        <View style={[S.flex1, S.center, { paddingHorizontal: 20, backgroundColor: 'rgba(20,18,32,0.48)' }]}>
-          <View style={[S.bg, S.roundedSM, { width: '100%', maxWidth: 560, padding: 18 }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[S.flex1, { backgroundColor: 'rgba(20,18,32,0.48)' }]}
+        >
+          <ScrollView
+            style={S.flex1}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 20 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          >
+          <View style={[S.bg, S.roundedSM, { width: '100%', maxWidth: 560, alignSelf: 'center', padding: 18 }]}>
             <View style={[S.flexRow, S.itemsCenter, S.spaceBetween, { marginBottom: 14 }]}>
               <View>
                 <Text style={[S.textBase, S.text, S.bold]}>修改这一句字幕</Text>
@@ -1795,7 +1843,8 @@ export default function PlayerScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ChoiceSheet
@@ -2068,10 +2117,9 @@ interface TranscriptRowProps {
   onPress: (index: number) => void;
   onLongPress: (index: number) => void;
   onWordPress: (index: number, word: string) => void;
-  onEdit: (index: number) => void;
 }
 const TranscriptRow = memo(function TranscriptRow({
-  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress, onWordPress, onEdit,
+  item, index, isActive, readingIdx, showRomaja, showTranslation, selected, selectionMode, onPress, onLongPress, onWordPress,
 }: TranscriptRowProps) {
   const words = useMemo(() => romanizeWords(item.ko), [item.ko]);
   const longPressedRef = useRef(false);
@@ -2080,10 +2128,10 @@ const TranscriptRow = memo(function TranscriptRow({
       style={[
         S.py3, { paddingHorizontal: 12 }, S.roundedSM, S.mb1,
         selected
-          ? { backgroundColor: 'rgba(124,92,252,0.14)', borderLeftWidth: 3, borderLeftColor: C.accent }
+          ? { backgroundColor: 'rgba(124,92,252,0.14)' }
           : isActive
-          ? { backgroundColor: 'rgba(124,92,252,0.08)', borderLeftWidth: 3, borderLeftColor: C.accent }
-          : { borderLeftWidth: 3, borderLeftColor: 'transparent' },
+          ? { backgroundColor: 'rgba(124,92,252,0.08)' }
+          : null,
       ]}
       onPress={() => {
         if (longPressedRef.current) {
@@ -2110,17 +2158,6 @@ const TranscriptRow = memo(function TranscriptRow({
           </View>
         ) : null}
         <Text style={[S.textXs, S.text3, { flex: 1 }]}>{item.time}</Text>
-        {!selectionMode ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`修改第 ${index + 1} 句字幕`}
-            hitSlop={8}
-            onPress={() => onEdit(index)}
-            style={[S.center, { width: 32, height: 32, marginVertical: -6 }]}
-          >
-            <Pencil size={14} color={C.text3} />
-          </TouchableOpacity>
-        ) : null}
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {words.map((p, wi) => {

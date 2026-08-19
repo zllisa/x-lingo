@@ -14,7 +14,7 @@ import { AudioFile } from '../../types';
 import { C, S } from '../../utils/theme';
 import { ChevronRight, Video, Music, MoreHorizontal, Plus, Trash2, Search, X } from 'lucide-react-native';
 import { RootStackParamList } from '../App';
-import { uploadAndTriggerTranscode, qiniuEnabled } from '../../services/qiniu';
+import { uploadAndTriggerTranscode, qiniuEnabled, qiniuKeyFromUrl } from '../../services/qiniu';
 import { centeredContent, useResponsiveLayout } from '../../utils/responsive';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -80,10 +80,10 @@ export default function ListenScreen() {
       console.log('[Upload] Starting upload, uri prefix:', uri.substring(0, 60));
       try {
         const userId = useAuthStore.getState().userId || undefined;
-        const { transcodeId, videoKey } = await uploadAndTriggerTranscode(uri, userId);
+        const { transcodeId, videoKey, playbackAudioKey, playbackAudioUrl } = await uploadAndTriggerTranscode(uri, userId);
         console.log('[Upload] Got transcodeId:', transcodeId);
         setUploadMsg('上传成功，已触发转码');
-        addFile({ ...base, transcodeId, videoKey });
+        addFile({ ...base, transcodeId, videoKey, playbackAudioKey, playbackAudioUrl });
       } catch (e: any) {
         Alert.alert('上传失败', e?.message || '请检查网络后重试');
       } finally {
@@ -95,11 +95,27 @@ export default function ListenScreen() {
     }
   };
 
-  const addAudioFile = (name: string, uri: string, category: string) => {
-    addFile({
+  const addAudioFile = async (name: string, uri: string, category: string) => {
+    const base: AudioFile = {
       id: Date.now().toString(), name, category, icon: '🎵', duration: '--:--',
       date: new Date().toLocaleDateString('zh-CN'), uri,
-    });
+    };
+    if (!qiniuEnabled()) {
+      addFile(base);
+      return;
+    }
+    setUploading(true);
+    setUploadMsg('正在上传原音质音频...');
+    try {
+      const userId = useAuthStore.getState().userId || undefined;
+      const { transcodeId, videoKey, playbackAudioKey, playbackAudioUrl } = await uploadAndTriggerTranscode(uri, userId);
+      addFile({ ...base, transcodeId, videoKey, playbackAudioKey, playbackAudioUrl });
+    } catch (e: any) {
+      Alert.alert('上传失败', e?.message || '请检查网络后重试');
+    } finally {
+      setUploading(false);
+      setUploadMsg('');
+    }
   };
 
   const openNewMaterialEditor = (name: string, uri: string, isVideo: boolean) => {
@@ -123,7 +139,7 @@ export default function ListenScreen() {
     if (draft.isVideo) {
       await addVideoFile(name, draft.uri, draft.category);
     } else {
-      addAudioFile(name, draft.uri, draft.category);
+      await addAudioFile(name, draft.uri, draft.category);
     }
   };
 
@@ -221,6 +237,13 @@ export default function ListenScreen() {
         text: '删除', style: 'destructive',
         onPress: () => {
           removeFile(item.id);
+          const cloudKeys = [
+            item.playbackAudioKey || item.videoKey,
+            qiniuKeyFromUrl(item.remoteAudioUrl),
+          ].filter(Boolean) as string[];
+          if (cloudKeys.length) {
+            import('../../services/qiniu').then(({ deleteFromQiniu }) => deleteFromQiniu([...new Set(cloudKeys)]));
+          }
           if (item.uri) {
             const path = decodeURIComponent(item.uri.replace(/^file:\/\//, ''));
             unlink(path).catch(() => {});
@@ -266,7 +289,13 @@ export default function ListenScreen() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         { options: ['取消', '从文件选择（音频/视频）', '从相册选择视频'], cancelButtonIndex: 0, title: '上传素材到精听' },
-        (index) => { if (index === 1) pickFromFile(); else if (index === 2) pickFromAlbum(); },
+        (index) => {
+          // Wait for the action sheet's native dismissal animation to finish.
+          // Presenting another native picker immediately can make iOS defer it
+          // for several seconds because both controllers compete to present.
+          if (index === 1) setTimeout(pickFromFile, 350);
+          else if (index === 2) setTimeout(pickFromAlbum, 350);
+        },
       );
     } else {
       Alert.alert('上传素材到精听', undefined, [

@@ -240,19 +240,11 @@ export const useListenStore = create<ListenStore>()(
               transcodeId,
               existingRemoteAudioUrl,
               userId,
-              fileId,
             );
             get().setTranscript(fileId, result.items);
             if (result.remoteAudioUrl) get().setRemoteAudioUrl(fileId, result.remoteAudioUrl);
             if (result.localAudioUri) get().setLocalAudioUri(fileId, result.localAudioUri);
-            // 转码已产出 WAV，源视频不再需要 → 删除省存储，并清空 videoKey。
-            const vk = get().audioFiles.find((f) => f.id === fileId)?.videoKey;
-            if (vk) {
-              const { deleteFromQiniu } = await import('../services/qiniu');
-              deleteFromQiniu([vk]);
-              set((s) => ({ audioFiles: s.audioFiles.map((f) => (f.id === fileId ? { ...f, videoKey: undefined } : f)) }));
-              pushFile(fileId);
-            }
+            // 高质量源长期保留用于播放；识别 WAV 不再替代或删除播放源。
             patch({ status: 'done', message: `识别完成 · ${result.items.length} 句`, resultCount: result.items.length });
             useUsageStore.getState().refresh();
           } catch (e: any) {

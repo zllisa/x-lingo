@@ -68,8 +68,11 @@ export interface AudioFile {
   // this path directly — no Qiniu download needed at play time.
   localAudioUri?: string;
   transcodeId?: string;
+  // 七牛上的高质量播放源；与 16 kHz 识别 WAV 分开保存。
+  playbackAudioUrl?: string;
+  playbackAudioKey?: string;
   // 上传到七牛的源文件 key（iOS 为本地提取后的 m4a，其他平台可能为视频）。
-  // 转码出 WAV 后即可删除以省存储；删除后清空。
+  // 旧数据兼容字段；新数据同时写入 playbackAudioKey。
   videoKey?: string;
 }
 
