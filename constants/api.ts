@@ -1,6 +1,6 @@
 import Config from 'react-native-config';
 
-// Azure & DeepSeek & Groq API Keys
+// Azure, Gemini & Groq API Keys
 // All keys injected via react-native-config from .env file — never commit to git
 
 export const AZURE_TTS_KEY = Config.PUBLIC_AZURE_TTS_KEY!;
@@ -15,6 +15,10 @@ export const GROQ_API_KEY = Config.PUBLIC_GROQ_API_KEY!;
 export const STT_PROVIDER = ((Config.PUBLIC_STT_PROVIDER || 'azure').toLowerCase()) as 'azure' | 'groq';
 export const DEEPSEEK_API_KEY = Config.PUBLIC_DEEPSEEK_API_KEY!;
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
+export const GEMINI_API_KEY = Config.PUBLIC_GEMINI_API_KEY!;
+// Gemini's OpenAI-compatible endpoint lets the existing chat-completions
+// integration keep the same request and response shape.
+export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 
 // Qiniu Cloud — video storage & audio transcoding
 export const QINIU_ACCESS_KEY = Config.PUBLIC_QINIU_ACCESS_KEY || '';

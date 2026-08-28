@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { deepSeekChat } from '../services/deepseek';
+import { geminiChat } from '../services/gemini';
 import { ChatMessage } from '../types';
 
 export function useChatAI() {
@@ -9,7 +9,7 @@ export function useChatAI() {
         role: m.type === 'user' ? ('user' as const) : ('assistant' as const),
         content: m.text,
       }));
-      return deepSeekChat(messages);
+      return geminiChat(messages);
     },
   });
 }

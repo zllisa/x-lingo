@@ -1199,8 +1199,8 @@ export default function PlayerScreen() {
     if (!sentence || explaining || cachedExplain || !activeFileId) return;
     setExplaining(true);
     try {
-      const { deepSeekExplain } = await import('../../services/deepseek');
-      const result = await deepSeekExplain(sentence);
+      const { geminiExplain } = await import('../../services/gemini');
+      const result = await geminiExplain(sentence);
       if (indices.length === 1) {
         useListenStore.getState().setExplain(activeFileId, indices[0], result);
       } else {

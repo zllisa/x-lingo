@@ -57,10 +57,10 @@ export default function SpeakScreen() {
     if (!text || generating) return;
     setGenerating(true);
     try {
-      const { deepSeekGenerateScenario, deepSeekGenerateTextbookScenario } = await import('../../services/deepseek');
+      const { geminiGenerateScenario, geminiGenerateTextbookScenario } = await import('../../services/gemini');
       const scenario = scenarioSource === 'textbook'
-        ? await deepSeekGenerateTextbookScenario(text, speakLevel)
-        : await deepSeekGenerateScenario(text, speakLevel);
+        ? await geminiGenerateTextbookScenario(text, speakLevel)
+        : await geminiGenerateScenario(text, speakLevel);
       useSpeakStore.getState().setActiveScenario(scenario);
       setScenarioInput('');
       navigation.navigate('TaskIntro');

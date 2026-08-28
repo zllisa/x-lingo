@@ -1,7 +1,7 @@
 import { whisperWords } from './whisperSTT';
 import { groqProxyWords } from './groqProxySTT';
 import { resegmentWords, type Word } from './resegment';
-import { deepSeekTranslate, deepSeekTranslateBatch, deepSeekResegment } from './deepseek';
+import { geminiTranslate, geminiTranslateBatch, geminiResegment } from './gemini';
 import { qiniuExtractAudio, qiniuEnabled, resumeTranscodeAudio } from './qiniu';
 import { extractAudio } from './AudioExtractor';
 import { stat } from '@dr.pogodin/react-native-fs';
@@ -110,7 +110,7 @@ export async function transcribeFile(
   // ── 语义重断句 + 回贴时间轴 ── LLM 对逐词文本做气口/意群断句，realign 把每
   // 句映射回精确的 start/end；LLM 失败时本地规则兜底。每个句子都带真实的秒级
   // start/end（供播放器单句循环 / 高亮用），不再靠「下一句起点」倒推。
-  const segments = await resegmentWords(words, deepSeekResegment, onProgress);
+  const segments = await resegmentWords(words, geminiResegment, onProgress);
   if (!segments.length) {
     throw new Error('断句失败：没有得到任何句子');
   }
@@ -129,12 +129,12 @@ export async function transcribeFile(
 
     let translations: string[];
     try {
-      translations = await deepSeekTranslateBatch(batch.map(s => s.text));
+      translations = await geminiTranslateBatch(batch.map(s => s.text));
     } catch (e: any) {
       // Fallback: translate sentence-by-sentence so we never drop a whole chunk
       console.warn('[Transcription] batch translate failed, falling back per-sentence:', e?.message);
       translations = await Promise.all(
-        batch.map(s => deepSeekTranslate(s.text).catch(() => '(翻译失败)')),
+        batch.map(s => geminiTranslate(s.text).catch(() => '(翻译失败)')),
       );
     }
 
