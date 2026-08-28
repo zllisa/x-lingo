@@ -107,7 +107,7 @@ export default function PlayerScreen() {
   const [durationMs, setDurationMs] = useState(0);
   const [currentMs, setCurrentMs] = useState(0);
   const seekingRef = useRef(false);
-  const loopRef = useRef(false);
+  const loopRef = useRef(true);
   const rateRef = useRef(1);
   const [speedSheetVisible, setSpeedSheetVisible] = useState(false);
   const [repeatSheetVisible, setRepeatSheetVisible] = useState(false);
@@ -208,6 +208,7 @@ export default function PlayerScreen() {
   const [explainIdx, setExplainIdx] = useState(0);
   const [explainIndices, setExplainIndices] = useState<number[]>([0]);
   const [multiExplain, setMultiExplain] = useState<TranscriptItem['explain']>();
+  const [liveExplain, setLiveExplain] = useState<TranscriptItem['explain']>();
   const [explainPlaying, setExplainPlaying] = useState(false);
   const explainPlaybackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explainPlaybackTokenRef = useRef(0);
@@ -329,6 +330,14 @@ export default function PlayerScreen() {
   useEffect(() => {
     const sub = addPlaybackListener((ev: PlaybackEvent) => {
       if (ev.id === MAIN_ID && ev.didFinish) {
+        if (loopRef.current) {
+          setCurrentMs(0);
+          setProgress(0);
+          setTranscriptIdx(0);
+          setWordIdx(-1);
+          setPlaying(true);
+          return;
+        }
         setPlaying(false);
         setCurrentMs(0);
         setProgress(0);
@@ -1183,6 +1192,7 @@ export default function PlayerScreen() {
     setExplainIdx(index);
     setExplainIndices([index]);
     setMultiExplain(undefined);
+    setLiveExplain(undefined);
     setExplainVisible(true);
     playExplainSelection([index]).catch(() => {});
   };
@@ -1204,6 +1214,7 @@ export default function PlayerScreen() {
     setExplainIdx(index);
     setExplainIndices([index]);
     setMultiExplain(undefined);
+    setLiveExplain(undefined);
     setExplainVisible(true);
     playExplainSelection([index]).catch(() => {});
   };
@@ -1214,6 +1225,7 @@ export default function PlayerScreen() {
     setExplainIdx(indices[0]);
     setExplainIndices(indices);
     setMultiExplain(undefined);
+    setLiveExplain(undefined);
     setSelectedSubtitleIndices([]);
     setExplainVisible(true);
     playExplainSelection(indices).catch(() => {});
@@ -1246,18 +1258,18 @@ export default function PlayerScreen() {
     const indices = explainIndices.length ? explainIndices : [explainIdx];
     const sentence = indices.map(index => items[index]?.ko).filter(Boolean).join('\n');
     const cachedExplain = indices.length === 1 ? items[indices[0]]?.explain : multiExplain;
-    if (!sentence || explaining || cachedExplain || !activeFileId) return;
+    if (!sentence || explaining || (cachedExplain && typeof cachedExplain.structure === 'object') || !activeFileId) return;
     setExplaining(true);
     try {
-      const { aiExplain } = await import('../../services/ai/tasks');
-      const result = await aiExplain(sentence);
+      const { aiExplainStream } = await import('../../services/ai/tasks');
+      const result = await aiExplainStream(sentence, partial => setLiveExplain(partial));
       if (indices.length === 1) {
         useListenStore.getState().setExplain(activeFileId, indices[0], result);
       } else {
         setMultiExplain(result);
       }
-    } catch (e) {
-      Alert.alert('讲解失败', '暂时无法生成讲解，请稍后再试。');
+    } catch (e: any) {
+      Alert.alert('讲解失败', e?.message || '暂时无法生成讲解，请稍后再试。');
     } finally {
       setExplaining(false);
     }
@@ -1450,10 +1462,6 @@ export default function PlayerScreen() {
             >
               <Text style={[S.textSm, S.text2]}>取消</Text>
             </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={[S.textSm, S.text, S.semibold]}>已选 {selectedSubtitleIndices.length} 句</Text>
-              <Text style={[S.textXxs, S.text3, { marginTop: 2 }]}>点击字幕继续选择</Text>
-            </View>
             {selectedSubtitleIndices.length === 1 ? (
               <TouchableOpacity
                 accessibilityRole="button"
@@ -1936,7 +1944,9 @@ export default function PlayerScreen() {
         visible={explainVisible}
         sentence={(explainIndices.length ? explainIndices : [explainIdx]).map(index => items[index]?.ko).filter(Boolean).join('\n')}
         translation={(explainIndices.length ? explainIndices : [explainIdx]).map(index => items[index]?.zh).filter(Boolean).join('\n')}
-        explain={explainIndices.length > 1 ? multiExplain : items[explainIdx]?.explain}
+        explain={liveExplain || (explainIndices.length > 1
+          ? (typeof multiExplain?.structure === 'object' ? multiExplain : undefined)
+          : (typeof items[explainIdx]?.explain?.structure === 'object' ? items[explainIdx].explain : undefined))}
         sentenceCount={explainIndices.length}
         sourcePlaying={explainPlaying}
         onToggleSourcePlayback={() => explainPlaying

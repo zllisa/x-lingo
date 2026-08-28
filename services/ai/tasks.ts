@@ -1,4 +1,4 @@
-import { requestAI } from './client';
+import { requestAI, requestAIStream } from './client';
 import type { AIMessage } from './types';
 import type { GrammarExplainItem, ExplainData, TopicScenario, SpeakLevel } from '../../types';
 
@@ -436,11 +436,20 @@ export async function aiTranslateTranscript(texts: string[]): Promise<string[]> 
   return results;
 }
 
-const EXPLAIN_PROMPT = `You are a Korean language teacher. Given one or more consecutive Korean subtitle lines, treat them as a single piece of spoken context and explain them in Chinese. When multiple lines are provided, first infer the complete sentence or thought across subtitle boundaries instead of analyzing each line in isolation. Return ONLY valid JSON, no other text.
+const EXPLAIN_PROMPT = `你是一位耐心、细致的韩语老师，讲解对象是韩语初学者。请用容易理解的简体中文详细讲解给出的一个或多个连续韩语字幕。多条字幕可能是同一个完整句子被切开的片段，必须先结合全部上下文还原整体意思，再进行分析。只返回有效 JSON，不要输出其它文字。
 
 JSON format:
 {
   "words": [{"word": "주말", "meaning": "周末"}, ...],
+  "structure": {
+    "segments": [
+      {"text": "아이스 아메리카노", "role": "宾语", "meaning": "冰美式", "note": "助词 을/를 省略"},
+      {"text": "한 잔", "role": "数量", "meaning": "一杯"},
+      {"text": "주세요", "role": "谓语 / 请求", "meaning": "请给我"}
+    ],
+    "pattern": "对象 + 数量 + 请求",
+    "natural": "请给我一杯冰美式。"
+  },
   "grammar": [
     {"text": "-을 거예요", "level": "beginner", "detail": "接在动词词干后，表示说话人的未来计划或较确定的意图；有收音用 -을 거예요，无收音用 -ㄹ 거예요。说明本句中的具体接法、语气以及容易混淆的表达。", "examples": ["내일 공부할 거예요.（明天打算学习。）"]}
   ],
@@ -453,6 +462,7 @@ JSON format:
 }
 
 Rules:
+- "structure": 必须提供结构化对象，禁止返回大段文字或 markdown。segments 按原句语序拆分，每段只写一个成分；text 保留原文，role 用简短中文标明主语/宾语/谓语/修饰语/数量，meaning 给出该片段在本句中的中文作用，note 简短注明助词作用或省略成分。pattern 用“成分 + 成分”总结韩语句型，natural 给出自然中文。
 - 只讲对学习者真正有帮助、容易误解的内容；不要为了填满栏目重复同一解释。
 - "words": 只列关键词或不容易从整句译文看出的词，不要逐字复述整句翻译。
 - "grammar": 只解释真正出现的关键语法。每项必须包含简洁的语法名称 text、难度 level、详细说明 detail 和 1-2 个 examples。detail 要讲清接续规则、本句中的实际形式、语气/含义、易错点或相近语法区别，不要只写一句词义。不要把词义、缩写还原和普通语体标签重复放进 grammar。level 为 "beginner" (TOPIK 1-2)、"intermediate" (TOPIK 3-4) 或 "advanced" (TOPIK 5-6)。
@@ -467,6 +477,70 @@ Rules:
 const EXPLAIN_FOLLOW_UP_PROMPT = `你是一名简洁、可靠的韩语老师。用户正在围绕一条或连续多条韩语字幕提问。多条字幕可能只是同一个完整句子被切开的片段，应先结合全部上下文还原整体意思，不要孤立理解其中某一条。
 只回答用户本轮的问题，不要重新生成完整的逐词、语法、例句和使用场景分析，也不要重复已经说过的内容。
 默认使用简体中文；韩语例句保留韩文并附简短中文含义。回答控制在能解决问题的最短篇幅。`;
+
+const EXPLAIN_STREAM_PROMPT = `你是一位耐心、细致的韩语老师，讲解对象是韩语初学者。请详细讲解用户给出的韩语字幕。
+你必须严格按照下面顺序输出 NDJSON：每一行只能是一个完整 JSON 对象，不要输出 markdown、代码块或其它文字。完成一个部分就立刻输出一行，不要等全部内容生成完。
+{"type":"structure","data":{"segments":[{"text":"原文片段","role":"主语/宾语/谓语/修饰语/数量","meaning":"本句中文作用","note":"助词作用或省略说明"}],"pattern":"成分 + 成分","natural":"自然中文译文"}}
+{"type":"why","data":"用初学者能理解的中文说明母语者为什么这样表达，1-2句"}
+{"type":"grammar","data":[{"text":"语法名称","level":"beginner","detail":"接续规则、本句形式、含义、语气和易错点","examples":["韩语例句（中文）"]}]}
+{"type":"chunks","data":[{"chunk":"词块","meaning":"中文含义"}]}
+{"type":"contractions","data":[{"form":"缩略形式","full":"完整形式","meaning":"中文含义"}]}
+{"type":"words","data":[{"word":"关键词","meaning":"中文含义"}]}
+{"type":"examples","data":["韩语例句（中文）"]}
+{"type":"usage","data":"使用场景、礼貌程度或替代表达"}
+{"type":"done"}
+structure 必须按韩语原始语序逐段拆解，明确句子成分、助词和省略内容。只讲真正出现且对初学者有用的语法，禁止为了填栏目重复内容；没有内容的数组返回 []。`;
+
+/** Stream completed explanation sections so the UI can render progressively. */
+export async function aiExplainStream(
+  text: string,
+  onPartial: (explain: ExplainData) => void,
+): Promise<ExplainData> {
+  let result: ExplainData = { words: [], grammar: [], examples: [], usage: '' };
+  let lineBuffer = '';
+  const publish = () => onPartial({ ...result });
+  const acceptLine = (line: string) => {
+    const clean = line.trim();
+    if (!clean || clean.startsWith('```')) return;
+    let event: any;
+    try { event = JSON.parse(clean); } catch { return; }
+    switch (event?.type) {
+      case 'structure':
+        if (event.data && Array.isArray(event.data.segments)) result = { ...result, structure: event.data };
+        break;
+      case 'why': result = { ...result, why: String(event.data ?? '') }; break;
+      case 'grammar': result = { ...result, grammar: Array.isArray(event.data) ? event.data : [] }; break;
+      case 'chunks': result = { ...result, chunks: Array.isArray(event.data) ? event.data : [] }; break;
+      case 'contractions': result = { ...result, contractions: Array.isArray(event.data) ? event.data : [] }; break;
+      case 'words': result = { ...result, words: Array.isArray(event.data) ? event.data : [] }; break;
+      case 'examples': result = { ...result, examples: Array.isArray(event.data) ? event.data.map(String) : [] }; break;
+      case 'usage': result = { ...result, usage: String(event.data ?? '') }; break;
+      case 'done': return;
+      default: return;
+    }
+    publish();
+  };
+
+  await requestAIStream({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: EXPLAIN_STREAM_PROMPT },
+        { role: 'user', content: text },
+      ],
+      max_tokens: 2800,
+    }),
+  }, chunk => {
+    lineBuffer += chunk;
+    const lines = lineBuffer.split(/\r?\n/);
+    lineBuffer = lines.pop() || '';
+    lines.forEach(acceptLine);
+  });
+  if (lineBuffer.trim()) acceptLine(lineBuffer);
+  if (!result.structure?.segments?.length) throw new Error('AI讲解未返回有效的句子结构');
+  return result;
+}
 
 export async function aiExplainFollowUp(
   sentence: string,
@@ -543,6 +617,18 @@ export async function aiExplain(text: string): Promise<ExplainData> {
     })) : [];
     const examples = Array.isArray(raw.examples) ? raw.examples.map((e: any) => String(e)) : [];
     const usage = typeof raw?.usage === 'string' ? raw.usage : String(raw?.usage ?? '');
+    const structure = raw?.structure && typeof raw.structure === 'object' && Array.isArray(raw.structure.segments)
+      ? {
+          segments: raw.structure.segments.map((segment: any) => ({
+            text: typeof segment?.text === 'string' ? segment.text : String(segment?.text ?? ''),
+            role: typeof segment?.role === 'string' ? segment.role : String(segment?.role ?? ''),
+            meaning: typeof segment?.meaning === 'string' ? segment.meaning : String(segment?.meaning ?? ''),
+            note: typeof segment?.note === 'string' ? segment.note : '',
+          })).filter((segment: any) => segment.text),
+          pattern: typeof raw.structure.pattern === 'string' ? raw.structure.pattern : '',
+          natural: typeof raw.structure.natural === 'string' ? raw.structure.natural : '',
+        }
+      : undefined;
     const why = typeof raw?.why === 'string' ? raw.why : (raw?.why != null ? String(raw.why) : '');
     const chunks = Array.isArray(raw.chunks) ? raw.chunks.map((c: any) => ({
       chunk: typeof c?.chunk === 'string' ? c.chunk : String(c?.chunk ?? ''),
@@ -560,7 +646,7 @@ export async function aiExplain(text: string): Promise<ExplainData> {
         Array.isArray(row) ? row.map((cell: any) => String(cell)).slice(0, 5) : [],
       ) : [],
     })).filter((t: any) => t.headers.length && t.rows.length) : [];
-    return { words, grammar, examples, usage, why, chunks, contractions, tables };
+    return { words, grammar, examples, usage, structure, why, chunks, contractions, tables };
   }
 
   try {

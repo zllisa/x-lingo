@@ -17,6 +17,7 @@ import { useLibraryStore } from '../../stores/useLibraryStore';
 import type { ExplainData, GrammarExplainItem } from '../../types';
 import { C, S } from '../../utils/theme';
 import { useResponsiveLayout } from '../../utils/responsive';
+import SentenceStructureDiagram from './SentenceStructureDiagram';
 
 type ChatTurn = { role: 'user' | 'assistant'; text: string };
 
@@ -130,15 +131,15 @@ export default function AIExplainSheet({
             </View>
 
             {/* 原句独立于讲解内容滚动区，用户向下查看语法和追问时始终保留上下文。 */}
-            <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.surface }}>
-              <View style={[S.flexRow, { alignItems: 'flex-start' }]}>
+            <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border }}>
+              <View style={[S.flexRow, { alignItems: 'center' }]}>
                 <ScrollView
                   style={{ flex: 1, maxHeight: sentenceCount > 1 ? Math.min(height * 0.22, 170) : Math.min(height * 0.18, 130) }}
                   contentContainerStyle={{ paddingRight: 10 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={sentenceCount > 1}
                 >
-                  <View style={[S.bgAccent5, S.roundedSM, { padding: 14 }]}>
+                  <View style={{ paddingVertical: 14, paddingRight: 14 }}>
                     <Text selectable selectionColor={C.accent} style={[S.textBase, S.semibold, S.text, { lineHeight: 24 }]}>{sentence}</Text>
                     {translation ? <Text selectable selectionColor={C.accent} style={[S.textSm, S.text2, { marginTop: 6, lineHeight: 21 }]}>{translation}</Text> : null}
                   </View>
@@ -147,7 +148,7 @@ export default function AIExplainSheet({
                   accessibilityRole="button"
                   accessibilityLabel={sourcePlaying ? '暂停原声' : '播放原声'}
                   onPress={onToggleSourcePlayback}
-                  style={[S.center, S.roundedFull, { width: 42, height: 42, marginTop: 4, backgroundColor: sourcePlaying ? C.accent : 'rgba(124,92,252,0.12)' }]}
+                  style={[S.center, S.roundedFull, { width: 42, height: 42, backgroundColor: sourcePlaying ? C.accent : 'rgba(124,92,252,0.12)' }]}
                 >
                   {sourcePlaying ? <Pause size={18} color="#fff" fill="#fff" /> : <Play size={18} color={C.accent} fill={C.accent} />}
                 </TouchableOpacity>
@@ -169,6 +170,7 @@ export default function AIExplainSheet({
             </View>
           ) : explain ? (
             <View style={{ gap: 10 }}>
+              {explain.structure ? <SentenceStructureDiagram structure={explain.structure} /> : null}
               {explain.why ? <ExplainCard title="为什么这样表达" body={explain.why} /> : null}
               {explain.grammar?.length ? (
                 <View style={[S.bgSurface2, S.roundedSM, { padding: 14 }]}>

@@ -105,11 +105,19 @@ export interface ExplainTable {
   rows: string[][];
 }
 
+export interface SentenceStructure {
+  segments: { text: string; role: string; meaning: string; note?: string }[];
+  pattern?: string;
+  natural?: string;
+}
+
 export interface ExplainData {
   words: { word: string; meaning: string }[];
   grammar: GrammarExplainItem[];
   examples: string[];
   usage: string;
+  // 面向初学者的句子成分、语序和整体结构拆解。
+  structure?: SentenceStructure;
   // 为什么这样表达（语感 / 母语者为何选这个说法）。可选：旧缓存没有。
   why?: string;
   // 词块 / 固定搭配（惯用组合，非逐词）
