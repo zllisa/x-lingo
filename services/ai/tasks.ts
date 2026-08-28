@@ -1,5 +1,6 @@
-import { GEMINI_API_KEY, GEMINI_BASE_URL } from '../constants/api';
-import type { GrammarExplainItem, ExplainData, TopicScenario, SpeakLevel } from '../types';
+import { requestAI } from './client';
+import type { AIMessage } from './types';
+import type { GrammarExplainItem, ExplainData, TopicScenario, SpeakLevel } from '../../types';
 
 // Difficulty instruction injected into conversation prompts based on the
 // learner's self-reported Korean level.
@@ -29,33 +30,25 @@ const WORD_LOOKUP_PROMPT = `You are a Korean dictionary. Given a Korean word (wh
 
 Reply ONLY with valid JSON, no other text.`;
 
-interface GeminiMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-export async function geminiChat(history: GeminiMessage[], systemPrompt?: string, level?: SpeakLevel): Promise<string> {
-  const messages: GeminiMessage[] = [
+export async function aiChat(history: AIMessage[], systemPrompt?: string, level?: SpeakLevel): Promise<string> {
+  const messages: AIMessage[] = [
     { role: 'system', content: (systemPrompt || SYSTEM_PROMPT) + levelInstruction(level) },
     ...history.slice(-20), // last 20 messages for context
   ];
 
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages,
       max_tokens: 150,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini error: ${response.status}`);
+    throw new Error(`AI error: ${response.status}`);
   }
 
   const data = await response.json();
@@ -79,13 +72,11 @@ const SCENARIO_GEN_PROMPT = `你是韩语口语陪练设计师。用户给一个
 生成 3-5 个由易到难的任务，覆盖该场景常见交流。只输出 JSON，不要任何其它内容。`;
 
 /** Generate a role-play scenario (role + tasks) from a free-text description. */
-export async function geminiGenerateScenario(description: string, level?: SpeakLevel): Promise<TopicScenario> {
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+export async function aiGenerateScenario(description: string, level?: SpeakLevel): Promise<TopicScenario> {
+  const response = await requestAI({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GEMINI_API_KEY}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: SCENARIO_GEN_PROMPT + levelInstruction(level) },
         { role: 'user', content: description },
@@ -93,7 +84,7 @@ export async function geminiGenerateScenario(description: string, level?: SpeakL
       max_tokens: 900,
     }),
   });
-  if (!response.ok) throw new Error(`Gemini scenario error: ${response.status}`);
+  if (!response.ok) throw new Error(`AI scenario error: ${response.status}`);
 
   const data = await response.json();
   let content = (data.choices[0].message.content as string || '').trim();
@@ -139,16 +130,14 @@ const TEXTBOOK_SCENARIO_PROMPT = `你是韩语口语陪练设计师。用户会�
 - 只输出 JSON，不要任何其它内容。`;
 
 /** Generate a speaking scenario grounded in pasted textbook content. */
-export async function geminiGenerateTextbookScenario(content: string, level?: SpeakLevel): Promise<TopicScenario> {
+export async function aiGenerateTextbookScenario(content: string, level?: SpeakLevel): Promise<TopicScenario> {
   const textbook = content.trim().slice(0, 6000);
   if (!textbook) throw new Error('课文内容不能为空');
 
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GEMINI_API_KEY}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: TEXTBOOK_SCENARIO_PROMPT + levelInstruction(level) },
         { role: 'user', content: `课文内容：\n${textbook}` },
@@ -156,7 +145,7 @@ export async function geminiGenerateTextbookScenario(content: string, level?: Sp
       max_tokens: 1000,
     }),
   });
-  if (!response.ok) throw new Error(`Gemini textbook scenario error: ${response.status}`);
+  if (!response.ok) throw new Error(`AI textbook scenario error: ${response.status}`);
 
   const data = await response.json();
   let result = (data.choices[0].message.content as string || '').trim();
@@ -210,17 +199,15 @@ Respond with a JSON object ONLY — no markdown, no extra text:
 }
 
 /** One scenario turn: returns the Korean reply + cumulative completed task ids. */
-export async function geminiScenarioChat(
-  history: GeminiMessage[],
+export async function aiScenarioChat(
+  history: AIMessage[],
   scenario: TopicScenario,
   level?: SpeakLevel,
 ): Promise<{ reply: string; done: string[] }> {
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GEMINI_API_KEY}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: buildScenarioSystemPrompt(scenario) + levelInstruction(level) },
         ...history.slice(-20),
@@ -258,20 +245,17 @@ const SUGGEST_PROMPT = `你是韩语口语老师。学生在对话练习中说�
 只输出 JSON，不要任何其它内容。`;
 
 /** Infer intent → natural Korean phrasing → short Chinese note. */
-export async function geminiSuggest(
+export async function aiSuggest(
   text: string,
   context?: string,
 ): Promise<{ intent: string; corrected: string; note: string }> {
   const userContent = context ? `场景：${context}\n学生说：${text}` : text;
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: SUGGEST_PROMPT },
         { role: 'user', content: userContent },
@@ -301,16 +285,13 @@ export async function geminiSuggest(
   }
 }
 
-export async function geminiTranslate(text: string): Promise<string> {
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+export async function aiTranslate(text: string): Promise<string> {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: '你是韩/英译中翻译器。韩语翻译成简体中文，英语也翻译成简体中文。只输出译文本身,不要加任何解释或引号。' },
         { role: 'user', content: text },
@@ -345,18 +326,15 @@ const RESEGMENT_PROMPT = `你是一个韩语精听（跟读 shadowing）App 的�
  * 语义重断句：纯韩语文本 → 断好的句子数组（顺序保持）。
  * 通过强约束「一字不改只切分」，保证下游 realign 回贴不漂移。
  */
-export async function geminiResegment(text: string): Promise<string[]> {
+export async function aiResegment(text: string): Promise<string[]> {
   if (!text.trim()) return [];
 
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: RESEGMENT_PROMPT },
         { role: 'user', content: text },
@@ -388,18 +366,15 @@ const TRANSLATE_BATCH_PROMPT = `你是韩/英译中翻译器。输入是一个 J
  * aligned 1:1 with the input order. Throws if the response can't be parsed
  * or the count doesn't match — caller should fall back to per-sentence.
  */
-export async function geminiTranslateBatch(texts: string[]): Promise<string[]> {
+export async function aiTranslateBatch(texts: string[]): Promise<string[]> {
   if (texts.length === 0) return [];
 
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: TRANSLATE_BATCH_PROMPT },
         { role: 'user', content: JSON.stringify(texts) },
@@ -422,6 +397,43 @@ export async function geminiTranslateBatch(texts: string[]): Promise<string[]> {
     throw new Error(`translate(batch) count mismatch: got ${Array.isArray(arr) ? arr.length : 'non-array'}, expected ${texts.length}`);
   }
   return arr.map((s: any) => String(s ?? '').trim());
+}
+
+const TRANSLATE_TRANSCRIPT_PROMPT = `你是韩/英字幕译中翻译器。用户会提供一整段带固定序号的字幕。
+请先把全部字幕作为连续上下文理解，再逐句翻译成自然、准确的简体中文。
+返回一个 JSON 对象，key 必须是原序号，value 是对应句子的中文译文，例如：{"1":"译文","2":"译文"}。
+不得合并、拆分、遗漏或新增序号。只输出 JSON 对象，不要解释或 markdown。`;
+
+/** Translate a complete subtitle selection in one contextual model call. */
+export async function aiTranslateTranscript(texts: string[]): Promise<string[]> {
+  if (texts.length === 0) return [];
+  const passage = texts.map((text, index) => `[${index + 1}] ${text}`).join('\n');
+  const response = await requestAI({
+    method: 'POST',
+    timeoutMs: 120_000,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: TRANSLATE_TRANSCRIPT_PROMPT },
+        { role: 'user', content: passage },
+      ],
+      max_tokens: 16000,
+    }),
+  });
+
+  if (!response.ok) throw new Error(`AI translate transcript error: ${response.status}`);
+  const data = await response.json();
+  let content = (data.choices[0].message.content as string || '').trim();
+  content = content.replace(/^```(?:json)?\s*/g, '').replace(/\s*```$/g, '').trim();
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start >= 0 && end > start) content = content.substring(start, end + 1);
+  const translated = JSON.parse(content) as Record<string, unknown>;
+  const results = texts.map((_, index) => String(translated[String(index + 1)] ?? '').trim());
+  if (results.some(result => !result)) {
+    throw new Error(`translate transcript count mismatch: expected ${texts.length} translations`);
+  }
+  return results;
 }
 
 const EXPLAIN_PROMPT = `You are a Korean language teacher. Given one or more consecutive Korean subtitle lines, treat them as a single piece of spoken context and explain them in Chinese. When multiple lines are provided, first infer the complete sentence or thought across subtitle boundaries instead of analyzing each line in isolation. Return ONLY valid JSON, no other text.
@@ -456,21 +468,18 @@ const EXPLAIN_FOLLOW_UP_PROMPT = `你是一名简洁、可靠的韩语老师。�
 只回答用户本轮的问题，不要重新生成完整的逐词、语法、例句和使用场景分析，也不要重复已经说过的内容。
 默认使用简体中文；韩语例句保留韩文并附简短中文含义。回答控制在能解决问题的最短篇幅。`;
 
-export async function geminiExplainFollowUp(
+export async function aiExplainFollowUp(
   sentence: string,
   translation: string,
   history: { role: 'user' | 'assistant'; text: string }[],
 ): Promise<string> {
   const context = `当前韩语字幕上下文：\n${sentence}\n已有中文译文：\n${translation || '无'}`;
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: EXPLAIN_FOLLOW_UP_PROMPT },
         { role: 'user', content: context },
@@ -485,16 +494,13 @@ export async function geminiExplainFollowUp(
   return String(data.choices?.[0]?.message?.content || '').trim();
 }
 
-export async function geminiExplain(text: string): Promise<ExplainData> {
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+export async function aiExplain(text: string): Promise<ExplainData> {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: EXPLAIN_PROMPT },
         { role: 'user', content: text },
@@ -594,21 +600,18 @@ Rules:
 - If the input has multiple lines, preserve the same line count and structure
 - Reply ONLY with the romanized text, no other text or explanation.`;
 
-export async function geminiRomanize(text: string): Promise<string> {
+export async function aiRomanize(text: string): Promise<string> {
   // Fast path: purely Latin/ASCII text (e.g. English sentences) — return as-is
   if (/^[\x00-\x7F\s.,!?;:'"()-]+$/.test(text)) {
     return text;
   }
 
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: ROMANIZE_PROMPT },
         { role: 'user', content: text },
@@ -625,21 +628,18 @@ export async function geminiRomanize(text: string): Promise<string> {
   return (data.choices[0].message.content as string).trim();
 }
 
-export async function geminiWordLookup(word: string): Promise<{
+export async function aiWordLookup(word: string): Promise<{
   pos: string;
   meanings: string[];
   example: string;
   base: string;
 }> {
-  const response = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+  const response = await requestAI({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
-      reasoning_effort: 'minimal',
       messages: [
         { role: 'system', content: WORD_LOOKUP_PROMPT },
         { role: 'user', content: word },

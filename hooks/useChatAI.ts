@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { geminiChat } from '../services/gemini';
+import { aiChat } from '../services/ai/tasks';
 import { ChatMessage } from '../types';
 
 export function useChatAI() {
@@ -9,7 +9,7 @@ export function useChatAI() {
         role: m.type === 'user' ? ('user' as const) : ('assistant' as const),
         content: m.text,
       }));
-      return geminiChat(messages);
+      return aiChat(messages);
     },
   });
 }

@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   AudioLines, BookOpen, Check, CheckCircle2, ChevronLeft, Copy, Lightbulb,
-  MessageCircle, Mic, MoreHorizontal, Pause, Pencil, Play, Puzzle, Repeat, Scissors, SkipBack,
+  Languages, MessageCircle, Mic, MoreHorizontal, Pause, Pencil, Play, Puzzle, Repeat, Scissors, SkipBack,
   SkipForward, Sparkles, Star, Type, Volume2, X,
 } from 'lucide-react-native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -216,6 +216,7 @@ export default function PlayerScreen() {
   const pendingExplainIdxRef = useRef<number | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [selectedSubtitleIndices, setSelectedSubtitleIndices] = useState<number[]>([]);
+  const [retranslating, setRetranslating] = useState(false);
   const [editingSubtitleIndex, setEditingSubtitleIndex] = useState<number | null>(null);
   const [editingSubtitleText, setEditingSubtitleText] = useState('');
   const [editingTranslationText, setEditingTranslationText] = useState('');
@@ -691,6 +692,55 @@ export default function PlayerScreen() {
     setSelectedSubtitleIndices([]);
     openSubtitleEditor(index);
   }, [openSubtitleEditor, selectedSubtitleIndices]);
+
+  const retranslateSubtitles = useCallback(async (requestedIndices: number[]) => {
+    if (!activeFileId || retranslating) return;
+    const currentItems = useListenStore.getState().transcripts[activeFileId] || [];
+    const indices = [...new Set(requestedIndices)]
+      .filter(index => Boolean(currentItems[index]?.ko?.trim()))
+      .sort((a, b) => a - b);
+    if (!indices.length) return;
+
+    setRetranslating(true);
+    try {
+      const { aiTranslateTranscript } = await import('../../services/ai/tasks');
+      const translated = new Map<number, { source: string; zh: string }>();
+      const texts = indices.map(index => currentItems[index].ko);
+      const translations = await aiTranslateTranscript(texts);
+      indices.forEach((index, position) => {
+        translated.set(index, { source: texts[position], zh: translations[position] || '' });
+      });
+
+      const latestItems = useListenStore.getState().transcripts[activeFileId] || [];
+      const nextItems = latestItems.map((item, index) => {
+        const result = translated.get(index);
+        return result && item.ko === result.source ? { ...item, zh: result.zh } : item;
+      });
+      setTranscript(activeFileId, nextItems);
+      setSelectedSubtitleIndices([]);
+      Alert.alert('重新翻译完成', `已更新 ${translated.size} 句中文翻译。`);
+    } catch (error: any) {
+      Alert.alert('重新翻译失败', error?.message || '请检查网络和模型配置后重试。');
+    } finally {
+      setRetranslating(false);
+    }
+  }, [activeFileId, retranslating, setTranscript]);
+
+  const confirmRetranslateAll = useCallback(() => {
+    if (!items.length || retranslating) return;
+    Alert.alert(
+      '重新翻译全部字幕',
+      '将使用当前 AI 模型重新生成全部中文译文，原字幕和时间轴不会改变。',
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '重新翻译', onPress: () => retranslateSubtitles(items.map((_, index) => index)) },
+      ],
+    );
+  }, [items, retranslating, retranslateSubtitles]);
+
+  const retranslateSelectedSubtitles = useCallback(() => {
+    retranslateSubtitles(selectedSubtitleIndices);
+  }, [retranslateSubtitles, selectedSubtitleIndices]);
 
   const renderTranscriptRow = useCallback(
     ({ item, index }: { item: TranscriptItem; index: number }) => (
@@ -1199,8 +1249,8 @@ export default function PlayerScreen() {
     if (!sentence || explaining || cachedExplain || !activeFileId) return;
     setExplaining(true);
     try {
-      const { geminiExplain } = await import('../../services/gemini');
-      const result = await geminiExplain(sentence);
+      const { aiExplain } = await import('../../services/ai/tasks');
+      const result = await aiExplain(sentence);
       if (indices.length === 1) {
         useListenStore.getState().setExplain(activeFileId, indices[0], result);
       } else {
@@ -1251,20 +1301,25 @@ export default function PlayerScreen() {
     const recognitionLabel = transcribing
       ? '字幕识别中'
       : items.length > 0 ? '重新识别字幕' : '识别字幕';
+    const translationLabel = retranslating ? '正在重新翻译' : '重新翻译字幕';
 
     if (Platform.OS === 'ios') {
       const options = items.length > 0
-        ? ['取消', recognitionLabel, '导出字幕文档']
+        ? ['取消', recognitionLabel, translationLabel, '导出字幕文档']
         : ['取消', recognitionLabel];
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options,
           cancelButtonIndex: 0,
-          disabledButtonIndices: transcribing ? [1] : undefined,
+          disabledButtonIndices: [
+            ...(transcribing ? [1] : []),
+            ...(retranslating && items.length > 0 ? [2] : []),
+          ],
         },
         (index) => {
           if (index === 1 && !transcribing) startTranscription();
-          if (index === 2) exportSubtitles();
+          if (index === 2 && items.length > 0 && !retranslating) confirmRetranslateAll();
+          if (index === 3) exportSubtitles();
         },
       );
       return;
@@ -1273,6 +1328,7 @@ export default function PlayerScreen() {
     Alert.alert('更多操作', undefined, [
       { text: '取消', style: 'cancel' },
       { text: recognitionLabel, onPress: transcribing ? undefined : startTranscription },
+      ...(items.length > 0 ? [{ text: translationLabel, onPress: retranslating ? undefined : confirmRetranslateAll }] : []),
       ...(items.length > 0 ? [{ text: '导出字幕文档', onPress: exportSubtitles }] : []),
     ]);
   };
@@ -1408,6 +1464,17 @@ export default function PlayerScreen() {
                 <Pencil size={17} color={C.accent} />
               </TouchableOpacity>
             ) : null}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`重新翻译已选择的 ${selectedSubtitleIndices.length} 句字幕`}
+              onPress={retranslateSelectedSubtitles}
+              disabled={retranslating}
+              style={[S.center, S.roundedFull, S.bgSurface2, { width: 44, height: 44, opacity: retranslating ? 0.5 : 1 }]}
+            >
+              {retranslating
+                ? <ActivityIndicator size="small" color={C.accent} />
+                : <Languages size={18} color={C.accent} />}
+            </TouchableOpacity>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={`复制已选择的 ${selectedSubtitleIndices.length} 句字幕`}

@@ -57,10 +57,10 @@ export default function SpeakScreen() {
     if (!text || generating) return;
     setGenerating(true);
     try {
-      const { geminiGenerateScenario, geminiGenerateTextbookScenario } = await import('../../services/gemini');
+      const { aiGenerateScenario, aiGenerateTextbookScenario } = await import('../../services/ai/tasks');
       const scenario = scenarioSource === 'textbook'
-        ? await geminiGenerateTextbookScenario(text, speakLevel)
-        : await geminiGenerateScenario(text, speakLevel);
+        ? await aiGenerateTextbookScenario(text, speakLevel)
+        : await aiGenerateScenario(text, speakLevel);
       useSpeakStore.getState().setActiveScenario(scenario);
       setScenarioInput('');
       navigation.navigate('TaskIntro');

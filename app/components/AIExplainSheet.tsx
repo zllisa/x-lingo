@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { geminiExplainFollowUp } from '../../services/gemini';
+import { aiExplainFollowUp } from '../../services/ai/tasks';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import type { ExplainData, GrammarExplainItem } from '../../types';
 import { C, S } from '../../utils/theme';
@@ -85,7 +85,7 @@ export default function AIExplainSheet({
     setQuestion('');
     setAsking(true);
     try {
-      const answer = await geminiExplainFollowUp(sentence, translation || '', nextTurns);
+      const answer = await aiExplainFollowUp(sentence, translation || '', nextTurns);
       setTurns([...nextTurns, { role: 'assistant', text: answer }]);
     } catch {
       setTurns([...nextTurns, { role: 'assistant', text: '这次没有回答成功，请稍后再试。' }]);

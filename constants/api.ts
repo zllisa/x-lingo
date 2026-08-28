@@ -19,6 +19,12 @@ export const GEMINI_API_KEY = Config.PUBLIC_GEMINI_API_KEY!;
 // Gemini's OpenAI-compatible endpoint lets the existing chat-completions
 // integration keep the same request and response shape.
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+export const QWEN_API_KEY = Config.PUBLIC_QWEN_API_KEY!;
+export const QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+export const DOUBAO_API_KEY = Config.PUBLIC_DOUBAO_API_KEY!;
+export const DOUBAO_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+export const AI_PROVIDER = (Config.PUBLIC_AI_PROVIDER || 'doubao').toLowerCase();
+export const AI_FALLBACK_PROVIDER = (Config.PUBLIC_AI_FALLBACK_PROVIDER || '').toLowerCase();
 
 // Qiniu Cloud — video storage & audio transcoding
 export const QINIU_ACCESS_KEY = Config.PUBLIC_QINIU_ACCESS_KEY || '';

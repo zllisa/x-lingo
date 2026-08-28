@@ -177,27 +177,22 @@ export default function ChatScreen() {
     addMessage(userMsg);
     const userId = useAuthStore.getState().userId;
     if (userId) recordStudyToCloud(userId, 1);
-    const GEMINI_KEY = Config.PUBLIC_GEMINI_API_KEY;
-    if (GEMINI_KEY) {
-      const scenario = useSpeakStore.getState().activeScenario;
-      const level = useProfileStore.getState().settings.speakLevel ?? 'beginner';
-      import('../../services/gemini').then((gemini) => {
-        const msgs = [...useSpeakStore.getState().chatHistory, userMsg];
-        const apiMsgs = msgs.map(m => ({ role: m.type === 'user' ? 'user' as const : 'assistant' as const, content: m.text }));
-        if (scenario) {
-          gemini.geminiScenarioChat(apiMsgs, scenario, level).then(({ reply, done }) => {
-            if (done?.length) setCompletedTasks(done); // auto-check completed tasks (before addMessage so it persists)
-            addMessage({ id: (Date.now() + 1).toString(), type: 'ai', text: reply, timestamp: Date.now() });
-          }).catch(() => fallbackReply());
-        } else {
-          gemini.geminiChat(apiMsgs, undefined, level).then(reply => {
-            addMessage({ id: (Date.now() + 1).toString(), type: 'ai', text: reply.trim(), timestamp: Date.now() });
-          }).catch(() => fallbackReply());
-        }
-      }).catch(() => fallbackReply());
-    } else {
-      fallbackReply();
-    }
+    const scenario = useSpeakStore.getState().activeScenario;
+    const level = useProfileStore.getState().settings.speakLevel ?? 'beginner';
+    import('../../services/ai/tasks').then((ai) => {
+      const msgs = [...useSpeakStore.getState().chatHistory, userMsg];
+      const apiMsgs = msgs.map(m => ({ role: m.type === 'user' ? 'user' as const : 'assistant' as const, content: m.text }));
+      if (scenario) {
+        ai.aiScenarioChat(apiMsgs, scenario, level).then(({ reply, done }) => {
+          if (done?.length) setCompletedTasks(done); // auto-check completed tasks (before addMessage so it persists)
+          addMessage({ id: (Date.now() + 1).toString(), type: 'ai', text: reply, timestamp: Date.now() });
+        }).catch(() => fallbackReply());
+      } else {
+        ai.aiChat(apiMsgs, undefined, level).then(reply => {
+          addMessage({ id: (Date.now() + 1).toString(), type: 'ai', text: reply.trim(), timestamp: Date.now() });
+        }).catch(() => fallbackReply());
+      }
+    }).catch(() => fallbackReply());
   }, [addMessage, setCompletedTasks]);
 
   const fallbackReply = () => {
@@ -575,8 +570,8 @@ function UserMessage({ item, renderText, onSentencePress, context }: UserMessage
     if (suggestion) { setSuggestion(null); return; } // toggle off
     setLoading(true);
     try {
-      const { geminiSuggest } = await import('../../services/gemini');
-      setSuggestion(await geminiSuggest(item.text, context));
+      const { aiSuggest } = await import('../../services/ai/tasks');
+      setSuggestion(await aiSuggest(item.text, context));
     } catch {
       setSuggestion({ intent: '', corrected: '', note: '建议获取失败，请重试' });
     } finally {
@@ -640,8 +635,8 @@ function AiMessage({ item, renderText, onSentencePress, onPlay, isPlaying, isLoa
     if (translation) { setTranslation(null); return; } // toggle off
     setTranslating(true);
     try {
-      const { geminiTranslate } = await import('../../services/gemini');
-      setTranslation(await geminiTranslate(item.text));
+      const { aiTranslate } = await import('../../services/ai/tasks');
+      setTranslation(await aiTranslate(item.text));
     } catch { setTranslation('翻译失败,请重试'); }
     finally { setTranslating(false); }
   };
